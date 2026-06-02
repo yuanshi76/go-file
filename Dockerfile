@@ -1,26 +1,47 @@
-# Build stage
-FROM golang AS builder
-ENV GO111MODULE=on \
-    CGO_ENABLED=1 \
+# syntax=docker/dockerfile:1
+
+# ---- Build stage ----
+# Alpine + musl so we can produce a fully static CGO binary (mattn/go-sqlite3
+# requires CGO) that runs on a bare alpine runtime.
+FROM golang:1.23-alpine AS builder
+
+RUN apk add --no-cache gcc musl-dev
+
+ENV CGO_ENABLED=1 \
     GOOS=linux \
-    GOARCH=amd64 \
-    GOPROXY=https://goproxy.cn
+    GOPROXY=https://goproxy.cn,direct
 
 WORKDIR /build
-COPY . .
+
+# Download dependencies first so this layer is cached across source changes.
+COPY go.mod go.sum ./
 RUN go mod download
-RUN go build -ldflags "-s -w -X 'go-file/common.Version=$(cat VERSION)' -extldflags '-static'" -o go-file
 
-# Final stage
-FROM alpine
+COPY . .
 
-RUN apk update \
-    && apk upgrade \
-    && apk add --no-cache ca-certificates tzdata \
+# VERSION is injected by CI (defaults to "dev" for local builds) and embedded
+# into the binary via -ldflags, so no VERSION file is required.
+ARG VERSION=dev
+RUN go build \
+    -ldflags "-s -w -X 'go-file/common.Version=${VERSION}' -linkmode external -extldflags '-static'" \
+    -o go-file .
+
+# ---- Runtime stage ----
+FROM alpine:3.20
+
+RUN apk add --no-cache ca-certificates tzdata \
     && update-ca-certificates 2>/dev/null || true
 
 ENV PORT=3000
-COPY --from=builder /build/go-file /
+COPY --from=builder /build/go-file /go-file
+
+# SQLite DB (go-file.db) and uploads live under the working directory, so mount
+# a volume here to persist data across container restarts.
 WORKDIR /data
+VOLUME ["/data"]
 EXPOSE 3000
+
+# -no-browser: never try to launch a browser from inside the container.
+# Override CMD to pass other flags, e.g. docker run ... -port 8080 -enable-p2p.
 ENTRYPOINT ["/go-file"]
+CMD ["-no-browser"]

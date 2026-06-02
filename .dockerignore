@@ -1,0 +1,21 @@
+# VCS / CI
+.git
+.github
+.gitignore
+
+# Local runtime data (must never leak into the image)
+*.db
+upload/
+data/
+*.log
+
+# Build artifacts
+go-file
+go-file.exe
+go-file-test*
+VERSION
+
+# Editor / OS noise
+.idea
+.vscode
+.DS_Store
