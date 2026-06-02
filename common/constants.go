@@ -90,7 +90,7 @@ var SQLitePath = "go-file.db"
 func printHelp() {
 	fmt.Println(fmt.Sprintf("Go File %s - A simple file sharing tool.", Version))
 	fmt.Println("Copyright (C) 2023 JustSong. All rights reserved.")
-	fmt.Println("GitHub: https://github.com/songquanpeng/go-file")
+	fmt.Println("GitHub: https://github.com/yuanshi76/go-file")
 	fmt.Println("Usage: go-file [options]")
 	fmt.Println("Options:")
 	flag.CommandLine.VisitAll(func(f *flag.Flag) {
@@ -151,9 +151,9 @@ func init() {
 	ImageUploadPath, _ = filepath.Abs(ImageUploadPath)
 
 	if _, err := os.Stat(UploadPath); os.IsNotExist(err) {
-		_ = os.Mkdir(UploadPath, 0777)
+		_ = os.Mkdir(UploadPath, 0750)
 	}
 	if _, err := os.Stat(ImageUploadPath); os.IsNotExist(err) {
-		_ = os.Mkdir(ImageUploadPath, 0777)
+		_ = os.Mkdir(ImageUploadPath, 0750)
 	}
 }

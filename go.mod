@@ -1,7 +1,7 @@
 module go-file
 
-// +heroku goVersion go1.19
-go 1.19
+// +heroku goVersion go1.23
+go 1.23
 
 require (
 	github.com/gin-contrib/sessions v0.0.5
