@@ -7,8 +7,12 @@ FROM golang:1.23-alpine AS builder
 
 RUN apk add --no-cache gcc musl-dev
 
+# _LARGEFILE64_SOURCE re-exposes pread64/pwrite64/off64_t, which musl 1.2.4+
+# (Alpine 3.18+) hides by default and which mattn/go-sqlite3's bundled SQLite
+# still references. Without it the CGO build fails with "off64_t undeclared".
 ENV CGO_ENABLED=1 \
     GOOS=linux \
+    CGO_CFLAGS=-D_LARGEFILE64_SOURCE \
     GOPROXY=https://goproxy.cn,direct
 
 WORKDIR /build
