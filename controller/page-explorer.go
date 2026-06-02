@@ -21,7 +21,7 @@ func GetExplorerPageOrFile(c *gin.Context) {
 	path, _ = url.PathUnescape(path)
 
 	fullPath := filepath.Join(common.ExplorerRootPath, path)
-	if !strings.HasPrefix(fullPath, common.ExplorerRootPath) {
+	if !common.IsSubPath(common.ExplorerRootPath, fullPath) {
 		// We may being attacked!
 		c.HTML(http.StatusBadRequest, "error.html", gin.H{
 			"message":  fmt.Sprintf("只能访问指定文件夹的子目录"),

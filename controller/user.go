@@ -8,6 +8,7 @@ import (
 	"go-file/common"
 	"go-file/model"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -18,8 +19,7 @@ func Login(c *gin.Context) {
 		Username: username,
 		Password: password,
 	}
-	user.ValidateAndFill()
-	if user.Status != common.UserStatusEnabled {
+	if err := user.ValidateAndFill(); err != nil || user.Status != common.UserStatusEnabled {
 		c.HTML(http.StatusForbidden, "login.html", gin.H{
 			"message":  "用户名或密码错误，或者该用户已被封禁",
 			"option":   common.OptionMap,
@@ -41,12 +41,32 @@ func Login(c *gin.Context) {
 		})
 		return
 	}
-	redirectUrl := c.Request.Referer()
-	if strings.HasSuffix(redirectUrl, "/login") {
-		redirectUrl = "/"
-	}
-	c.Redirect(http.StatusFound, redirectUrl)
+	c.Redirect(http.StatusFound, safeRedirectTarget(c.Request.Referer()))
 	return
+}
+
+// safeRedirectTarget restricts post-login redirects to same-site relative
+// paths to prevent open redirect attacks via a forged Referer header.
+func safeRedirectTarget(referer string) string {
+	const fallback = "/"
+	if referer == "" {
+		return fallback
+	}
+	u, err := url.Parse(referer)
+	if err != nil {
+		return fallback
+	}
+	target := u.Path
+	if target == "" || !strings.HasPrefix(target, "/") || strings.HasPrefix(target, "//") {
+		return fallback
+	}
+	if strings.HasSuffix(target, "/login") {
+		return fallback
+	}
+	if u.RawQuery != "" {
+		target += "?" + u.RawQuery
+	}
+	return target
 }
 
 func Logout(c *gin.Context) {
@@ -56,35 +76,67 @@ func Logout(c *gin.Context) {
 	c.Redirect(http.StatusFound, "/login")
 }
 
+type UpdateSelfRequest struct {
+	Username    string `json:"username"`
+	DisplayName string `json:"displayName"`
+	Password    string `json:"password"`
+}
+
 func UpdateSelf(c *gin.Context) {
-	var user model.User
-	err := json.NewDecoder(c.Request.Body).Decode(&user)
-	if err != nil {
+	var req UpdateSelfRequest
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": "无效的参数",
 		})
 		return
 	}
-	user.Id = c.GetInt("id")
-	role := c.GetInt("role")
-	if role != common.RoleAdminUser {
-		user.Role = 0
-		user.Status = 0
+	id := c.GetInt("id")
+	updates := make(map[string]interface{})
+
+	req.Username = strings.TrimSpace(req.Username)
+	if req.Username != "" {
+		if len(req.Username) < 3 || len(req.Username) > 32 {
+			c.JSON(http.StatusOK, gin.H{"success": false, "message": "用户名长度需在 3 到 32 个字符之间"})
+			return
+		}
+		if model.IsUsernameTaken(req.Username, id) {
+			c.JSON(http.StatusOK, gin.H{"success": false, "message": "该用户名已被占用"})
+			return
+		}
+		updates["username"] = req.Username
 	}
-	// TODO: check Display Name to avoid XSS attack
-	if err := user.Update(); err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": err.Error(),
-		})
+
+	req.DisplayName = strings.TrimSpace(req.DisplayName)
+	if req.DisplayName != "" {
+		// Strip angle brackets to avoid stored XSS when the name is rendered.
+		updates["display_name"] = common.SanitizeText(req.DisplayName)
+	}
+
+	if req.Password != "" {
+		if len(req.Password) < 6 {
+			c.JSON(http.StatusOK, gin.H{"success": false, "message": "密码长度至少为 6 个字符"})
+			return
+		}
+		hashed, err := model.HashPassword(req.Password)
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{"success": false, "message": err.Error()})
+			return
+		}
+		updates["password"] = hashed
+	}
+
+	if len(updates) == 0 {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "没有需要更新的内容"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-	})
+	if err := model.UpdateUserFields(id, updates); err != nil {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": ""})
 	return
 }
 
@@ -92,8 +144,6 @@ func UpdateSelf(c *gin.Context) {
 func CreateUser(c *gin.Context) {
 	var user model.User
 	err := json.NewDecoder(c.Request.Body).Decode(&user)
-	user.DisplayName = user.Username
-	// TODO: Check user.Status && user.Role
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -101,6 +151,16 @@ func CreateUser(c *gin.Context) {
 		})
 		return
 	}
+	user.Username = strings.TrimSpace(user.Username)
+	if len(user.Username) < 3 || len(user.Username) > 32 {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "用户名长度需在 3 到 32 个字符之间"})
+		return
+	}
+	if len(user.Password) < 6 {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "密码长度至少为 6 个字符"})
+		return
+	}
+	user.DisplayName = common.SanitizeText(user.Username)
 
 	if err := user.Insert(); err != nil {
 		c.JSON(http.StatusOK, gin.H{

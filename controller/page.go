@@ -67,6 +67,7 @@ func GetManagePage(c *gin.Context) {
 		"FileDownloadPermission":  common.FileDownloadPermission,
 		"ImageUploadPermission":   common.ImageUploadPermission,
 		"ImageDownloadPermission": common.ImageDownloadPermission,
+		"VideoDownloadPermission": common.VideoDownloadPermission,
 		"isAdmin":                 role == common.RoleAdminUser,
 		"StatEnabled":             common.StatEnabled,
 	})

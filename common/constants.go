@@ -39,6 +39,9 @@ var (
 	FileDownloadPermission  = RoleGuestUser
 	ImageUploadPermission   = RoleGuestUser
 	ImageDownloadPermission = RoleGuestUser
+	// VideoDownloadPermission defaults to RoleCommonUser so stored videos are
+	// not exposed to anonymous visitors unless an admin lowers it.
+	VideoDownloadPermission = RoleCommonUser
 )
 
 var (

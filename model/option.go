@@ -25,6 +25,7 @@ func InitOptionMap() {
 	common.OptionMap["FileDownloadPermission"] = strconv.Itoa(common.FileDownloadPermission)
 	common.OptionMap["ImageUploadPermission"] = strconv.Itoa(common.ImageUploadPermission)
 	common.OptionMap["ImageDownloadPermission"] = strconv.Itoa(common.ImageDownloadPermission)
+	common.OptionMap["VideoDownloadPermission"] = strconv.Itoa(common.VideoDownloadPermission)
 	common.OptionMap["WebsiteName"] = "Go File"
 	common.OptionMap["FooterInfo"] = ""
 	common.OptionMap["Version"] = common.Version
@@ -68,6 +69,8 @@ func updateOptionMap(key string, value string) {
 			common.ImageUploadPermission = intValue
 		case "ImageDownloadPermission":
 			common.ImageDownloadPermission = intValue
+		case "VideoDownloadPermission":
+			common.VideoDownloadPermission = intValue
 		}
 	}
 	if key == "StatEnabled" {

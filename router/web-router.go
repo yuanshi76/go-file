@@ -36,7 +36,11 @@ func setWebRouter(router *gin.Engine) {
 
 	router.GET("/image", middleware.ExtractUserInfo(), controller.GetImagePage)
 
-	router.GET("/video", middleware.ExtractUserInfo(), controller.GetVideoPage)
+	videoAuth := router.Group("/")
+	videoAuth.Use(middleware.DownloadRateLimit(), middleware.VideoDownloadPermissionCheck())
+	{
+		videoAuth.GET("/video", controller.GetVideoPage)
+	}
 
 	basicAuth := router.Group("/")
 	basicAuth.Use(middleware.WebAuth()) // WebAuth already has username in context

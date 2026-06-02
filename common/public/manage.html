@@ -282,6 +282,18 @@
                                                                onclick="updateUser('displayName', 'inputDisplayName')">提交</a>
                                                         </p>
                                                     </div>
+                                                    <label class="label">更改用户名</label>
+                                                    <div class="field has-addons">
+                                                        <p class="control is-expanded">
+                                                            <input class="input" id="inputUsername"
+                                                                   type="text"
+                                                                   placeholder="请输入新的用户名（3-32 个字符）">
+                                                        </p>
+                                                        <p class="control">
+                                                            <a class="button"
+                                                               onclick="updateUser('username', 'inputUsername')">提交</a>
+                                                        </p>
+                                                    </div>
                                                     <label class="label">其他操作</label>
                                                     <div class="buttons">
                                                         <a class="button is-light" href="/logout">注销</a>
@@ -423,12 +435,26 @@
                                                     </span>
                                                         </p>
                                                     </div>
+                                                    <label class="label">视频访问的最低权限要求：</label>
+                                                    <div class="field has-addons">
+                                                        <p class="control">
+                                                    <span class="select">
+                                                      <select id="VideoDownloadPermission"
+                                                              onchange="updateOption('VideoDownloadPermission', 'VideoDownloadPermission')">
+                                                          <option value=0>访客用户</option>
+                                                          <option value=1>普通用户</option>
+                                                          <option value=10>管理员用户</option>
+                                                      </select>
+                                                    </span>
+                                                        </p>
+                                                    </div>
                                                     <script>
                                                         (function () {
                                                             document.getElementById('FileUploadPermission').value = "{{.FileUploadPermission}}";
                                                             document.getElementById('FileDownloadPermission').value = "{{.FileDownloadPermission}}";
                                                             document.getElementById('ImageUploadPermission').value = "{{.ImageUploadPermission}}";
                                                             document.getElementById('ImageDownloadPermission').value = "{{.ImageDownloadPermission}}";
+                                                            document.getElementById('VideoDownloadPermission').value = "{{.VideoDownloadPermission}}";
                                                         })();
                                                     </script>
                                                     <h3>统计设置</h3>

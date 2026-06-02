@@ -18,7 +18,7 @@ func GetVideoPage(c *gin.Context) {
 	path, _ = url.PathUnescape(path)
 
 	rootPath := filepath.Join(common.VideoServePath, path)
-	if !strings.HasPrefix(rootPath, common.VideoServePath) {
+	if !common.IsSubPath(common.VideoServePath, rootPath) {
 		// We may being attacked!
 		c.HTML(http.StatusBadRequest, "error.html", gin.H{
 			"message":  fmt.Sprintf("只能访问指定路径下的文件"),

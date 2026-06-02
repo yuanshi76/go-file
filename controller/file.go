@@ -27,7 +27,7 @@ func UploadFile(c *gin.Context) {
 	path := c.PostForm("path")
 	if path != "" { // Upload to explorer's path
 		uploadPath = filepath.Join(common.ExplorerRootPath, path)
-		if !strings.HasPrefix(uploadPath, common.ExplorerRootPath) {
+		if !common.IsSubPath(common.ExplorerRootPath, uploadPath) {
 			// In this case the given path is not valid, so we reset it to ExplorerRootPath.
 			uploadPath = common.ExplorerRootPath
 		}
@@ -152,20 +152,24 @@ func DeleteFile(c *gin.Context) {
 		Id: deleteRequest.Id,
 	}
 	model.DB.Where("id = ?", deleteRequest.Id).First(&fileObj)
-	err = fileObj.Delete()
-	if err != nil {
+	if fileObj.Id == 0 {
 		c.JSON(http.StatusOK, gin.H{
-			"success": true,
+			"success": false,
+			"message": "文件不存在",
+		})
+		return
+	}
+	if err = fileObj.Delete(); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
 			"message": err.Error(),
 		})
-	} else {
-		message := "文件删除成功"
-		c.JSON(http.StatusOK, gin.H{
-			"success": true,
-			"message": message,
-		})
+		return
 	}
-
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "文件删除成功",
+	})
 }
 
 func DownloadFile(c *gin.Context) {
@@ -177,7 +181,7 @@ func DownloadFile(c *gin.Context) {
 		link = strings.TrimPrefix(link, "/")
 	}
 	fullPath := filepath.Join(common.UploadPath, subfolder, filename)
-	if !strings.HasPrefix(fullPath, common.UploadPath) {
+	if !common.IsSubPath(common.UploadPath, fullPath) {
 		// We may being attacked!
 		c.Status(403)
 		return
