@@ -79,6 +79,11 @@ var VideoServePath = "upload"
 var FS embed.FS
 
 var SessionSecret = uuid.New().String()
+var sessionSecretFromEnv bool
+
+// SessionSecretPath is where the auto-generated session secret is persisted so
+// that cookie sessions survive restarts. Ignored when SESSION_SECRET is set.
+var SessionSecretPath = "session.key"
 
 var SQLitePath = "go-file.db"
 
@@ -96,8 +101,18 @@ func printHelp() {
 	os.Exit(0)
 }
 
+// isTestBinary reports whether the process is a `go test` binary. Such binaries
+// are named "*.test" (or "*.test.exe" on Windows) and inject -test.* flags that
+// this package's flag set does not define, so flag.Parse() must be skipped there.
+func isTestBinary() bool {
+	arg0 := os.Args[0]
+	return strings.HasSuffix(arg0, ".test") || strings.HasSuffix(arg0, ".test.exe")
+}
+
 func init() {
-	flag.Parse()
+	if !isTestBinary() {
+		flag.Parse()
+	}
 
 	if *PrintHelp {
 		printHelp()
@@ -110,6 +125,10 @@ func init() {
 
 	if os.Getenv("SESSION_SECRET") != "" {
 		SessionSecret = os.Getenv("SESSION_SECRET")
+		sessionSecretFromEnv = true
+	}
+	if os.Getenv("SESSION_SECRET_PATH") != "" {
+		SessionSecretPath = os.Getenv("SESSION_SECRET_PATH")
 	}
 	if os.Getenv("SQLITE_PATH") != "" {
 		SQLitePath = os.Getenv("SQLITE_PATH")

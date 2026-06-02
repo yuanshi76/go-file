@@ -8,9 +8,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 	"go-file/common"
+	"go-file/middleware"
 	"go-file/model"
 	"go-file/router"
 	"html/template"
+	"net/http"
 	"os"
 	"strconv"
 )
@@ -50,6 +52,9 @@ func main() {
 	// Initialize options
 	model.InitOptionMap()
 
+	// Persist the session secret so cookie sessions survive restarts.
+	common.InitSessionSecret()
+
 	// Initialize HTTP server
 	server := gin.Default()
 	server.SetHTMLTemplate(loadTemplate())
@@ -63,9 +68,17 @@ func main() {
 		store = cookie.NewStore([]byte(common.SessionSecret))
 	}
 	store.Options(sessions.Options{
+		Path:     "/",
 		HttpOnly: true,
+		// Lax lets normal top-level navigations carry the cookie while blocking
+		// it on cross-site POSTs, which mitigates CSRF. Secure is opt-in via
+		// COOKIE_SECURE=true for HTTPS deployments (can't be unconditional or
+		// cookies break on plain-HTTP/LAN usage, the common case here).
+		SameSite: http.SameSiteLaxMode,
+		Secure:   os.Getenv("COOKIE_SECURE") == "true",
 	})
 	server.Use(sessions.Sessions("session", store))
+	server.Use(middleware.CSRFProtect())
 
 	router.SetRouter(server)
 	var realPort = os.Getenv("PORT")
