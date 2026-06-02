@@ -12,7 +12,30 @@ import (
 	"time"
 )
 
+// viewerRole returns the role of the current session user, defaulting to guest
+// when no one is logged in.
+func viewerRole(c *gin.Context) int {
+	session := sessions.Default(c)
+	if role, ok := session.Get("role").(int); ok {
+		return role
+	}
+	return common.RoleGuestUser
+}
+
 func GetIndexPage(c *gin.Context) {
+	// The home page lists file names/metadata, so it must honor the same
+	// permission as downloading. Otherwise raising FileDownloadPermission to
+	// require login still leaks the listing to anonymous visitors here, even
+	// though /explorer and the download routes are gated.
+	if viewerRole(c) < common.FileDownloadPermission {
+		c.HTML(http.StatusForbidden, "error.html", gin.H{
+			"message":  "请登录后查看文件列表",
+			"option":   common.OptionMap,
+			"username": c.GetString("username"),
+		})
+		return
+	}
+
 	query := c.Query("query")
 	isQuery := query != ""
 	p, _ := strconv.Atoi(c.Query("p"))
