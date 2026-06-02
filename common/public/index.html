@@ -55,7 +55,7 @@
                                     {{end}}
                                 </div>
                                 <div class="actions">
-                                    {{if $.username}}
+                                    {{if and $.username (or $.isAdmin (eq $.username $file.Uploader))}}
                                     <span onclick="deleteFile({{$file.Id}}, '{{$file.Link}}')">
                                         <img src="/public/icon/delete.svg"/>
                                     </span>

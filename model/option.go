@@ -26,6 +26,7 @@ func InitOptionMap() {
 	common.OptionMap["ImageUploadPermission"] = strconv.Itoa(common.ImageUploadPermission)
 	common.OptionMap["ImageDownloadPermission"] = strconv.Itoa(common.ImageDownloadPermission)
 	common.OptionMap["VideoDownloadPermission"] = strconv.Itoa(common.VideoDownloadPermission)
+	common.OptionMap["MaxUploadSizeMB"] = strconv.Itoa(common.MaxUploadSizeMB)
 	common.OptionMap["WebsiteName"] = "Go File"
 	common.OptionMap["FooterInfo"] = ""
 	common.OptionMap["Version"] = common.Version
@@ -39,6 +40,13 @@ func InitOptionMap() {
 func UpdateOption(key string, value string) error {
 	if key == "StatEnabled" && value == "true" && !common.RedisEnabled {
 		return errors.New("未启用 Redis，无法启用统计功能")
+	}
+	if key == "MaxUploadSizeMB" {
+		n, err := strconv.Atoi(strings.TrimSpace(value))
+		if err != nil || n < 0 {
+			return errors.New("上传大小限制必须是不小于 0 的整数（0 表示不限制）")
+		}
+		value = strconv.Itoa(n)
 	}
 
 	// Save to database first
@@ -71,6 +79,11 @@ func updateOptionMap(key string, value string) {
 			common.ImageDownloadPermission = intValue
 		case "VideoDownloadPermission":
 			common.VideoDownloadPermission = intValue
+		}
+	}
+	if key == "MaxUploadSizeMB" {
+		if n, err := strconv.Atoi(value); err == nil && n >= 0 {
+			common.MaxUploadSizeMB = n
 		}
 	}
 	if key == "StatEnabled" {

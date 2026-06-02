@@ -34,6 +34,13 @@ func UploadImage(c *gin.Context) {
 	images := form.File["image"]
 	var filenames []string
 	for _, file := range images {
+		if limit := common.MaxUploadBytes(); limit > 0 && file.Size > limit {
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{
+				"success": false,
+				"message": fmt.Sprintf("图片 %s 超过上传大小限制（%d MB）", file.Filename, common.MaxUploadSizeMB),
+			})
+			return
+		}
 		id := uuid.New().String()
 		ext := filepath.Ext(file.Filename)
 		filename := fmt.Sprintf("%s%s", id, ext)
@@ -85,10 +92,17 @@ func DeleteImage(c *gin.Context) {
 		})
 		return
 	}
+	if !canDeleteResource(c, imageObj.Uploader) {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"message": "无权删除他人上传的图片",
+		})
+		return
+	}
 	err = imageObj.Delete()
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
-			"success": true,
+			"success": false,
 			"message": err.Error(),
 		})
 		return

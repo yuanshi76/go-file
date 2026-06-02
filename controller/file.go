@@ -21,6 +21,17 @@ type FileDeleteRequest struct {
 	//Token string
 }
 
+// canDeleteResource reports whether the current request may delete a resource
+// owned by uploader. Admins may delete anything; other users may only delete
+// resources they uploaded themselves.
+func canDeleteResource(c *gin.Context, uploader string) bool {
+	if c.GetInt("role") == common.RoleAdminUser {
+		return true
+	}
+	username := c.GetString("username")
+	return username != "" && username == uploader
+}
+
 func UploadFile(c *gin.Context) {
 	uploadPath := common.UploadPath
 	saveToDatabase := true
@@ -75,6 +86,11 @@ func UploadFile(c *gin.Context) {
 		return
 	}
 	for _, file := range files {
+		if limit := common.MaxUploadBytes(); limit > 0 && file.Size > limit {
+			c.String(http.StatusRequestEntityTooLarge,
+				fmt.Sprintf("文件 %s 超过上传大小限制（%d MB）", file.Filename, common.MaxUploadSizeMB))
+			return
+		}
 		// In case someone wants to upload to other folders.
 		filename := filepath.Base(file.Filename)
 		link := fmt.Sprintf("%s/%s", subfolder, filename)
@@ -156,6 +172,13 @@ func DeleteFile(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": "文件不存在",
+		})
+		return
+	}
+	if !canDeleteResource(c, fileObj.Uploader) {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"message": "无权删除他人上传的文件",
 		})
 		return
 	}

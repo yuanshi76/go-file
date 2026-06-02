@@ -48,6 +48,30 @@ func TestSanitizeText(t *testing.T) {
 	}
 }
 
+func TestMaxUploadBytes(t *testing.T) {
+	original := MaxUploadSizeMB
+	defer func() { MaxUploadSizeMB = original }()
+
+	tests := []struct {
+		name string
+		mb   int
+		want int64
+	}{
+		{"default 200MB", 200, 200 * 1024 * 1024},
+		{"zero means unlimited", 0, 0},
+		{"negative means unlimited", -5, 0},
+		{"one MB", 1, 1024 * 1024},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			MaxUploadSizeMB = tt.mb
+			if got := MaxUploadBytes(); got != tt.want {
+				t.Errorf("MaxUploadBytes() with %d MB = %d, want %d", tt.mb, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestIsTrustedOrigin(t *testing.T) {
 	const host = "files.example.com"
 	tests := []struct {

@@ -27,8 +27,8 @@ func (image *Image) Insert() error {
 }
 
 func (image *Image) Delete() error {
-	var err error
-	err = DB.Delete(image).Error
-	err = os.Remove(filepath.Join(common.ImageUploadPath, image.Filename))
-	return err
+	if err := DB.Delete(image).Error; err != nil {
+		return err
+	}
+	return os.Remove(filepath.Join(common.ImageUploadPath, image.Filename))
 }

@@ -64,6 +64,7 @@ func GetIndexPage(c *gin.Context) {
 		"message":  "",
 		"option":   common.OptionMap,
 		"username": c.GetString("username"),
+		"isAdmin":  viewerRole(c) == common.RoleAdminUser,
 		"files":    files,
 		"isQuery":  isQuery,
 		"next":     next,
@@ -91,12 +92,25 @@ func GetManagePage(c *gin.Context) {
 		"ImageUploadPermission":   common.ImageUploadPermission,
 		"ImageDownloadPermission": common.ImageDownloadPermission,
 		"VideoDownloadPermission": common.VideoDownloadPermission,
+		"MaxUploadSizeMB":         common.MaxUploadSizeMB,
 		"isAdmin":                 role == common.RoleAdminUser,
 		"StatEnabled":             common.StatEnabled,
 	})
 }
 
 func GetImagePage(c *gin.Context) {
+	// The image hosting page is an upload interface, so gate it behind the same
+	// permission the /api/image upload endpoint enforces. Without this, raising
+	// ImageUploadPermission to require login still serves the upload UI to
+	// anonymous visitors, even though the API rejects their uploads.
+	if viewerRole(c) < common.ImageUploadPermission {
+		c.HTML(http.StatusForbidden, "error.html", gin.H{
+			"message":  "请登录后使用图床",
+			"option":   common.OptionMap,
+			"username": c.GetString("username"),
+		})
+		return
+	}
 	c.HTML(http.StatusOK, "image.html", gin.H{
 		"message":  "",
 		"option":   common.OptionMap,

@@ -457,6 +457,21 @@
                                                             document.getElementById('VideoDownloadPermission').value = "{{.VideoDownloadPermission}}";
                                                         })();
                                                     </script>
+                                                    <h3>上传设置</h3>
+                                                    <label class="label">单个文件大小上限（MB，0 表示不限制）：</label>
+                                                    <div class="field has-addons">
+                                                        <div class="control is-light is-expanded">
+                                                            <input class="input" id="inputMaxUploadSize" type="number"
+                                                                   min="0" step="1" value="{{.MaxUploadSizeMB}}"
+                                                                   placeholder="默认 200，0 表示无限制">
+                                                        </div>
+                                                        <div class="control">
+                                                            <a class="button is-light"
+                                                               onclick="updateOption('MaxUploadSizeMB', 'inputMaxUploadSize')">
+                                                                更新
+                                                            </a>
+                                                        </div>
+                                                    </div>
                                                     <h3>统计设置</h3>
                                                     <label class="label">是否启用访问数据统计：</label>
                                                     <div class="field has-addons">

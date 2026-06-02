@@ -19,6 +19,19 @@ var OptionMap map[string]string
 var ItemsPerPage = 10
 var AbstractTextLength = 40
 
+// MaxUploadSizeMB is the per-file upload size limit in megabytes. 0 means no
+// limit. Admins can change it from the management settings page.
+var MaxUploadSizeMB = 200
+
+// MaxUploadBytes returns the per-file upload size limit in bytes, or 0 when
+// uploads are unlimited.
+func MaxUploadBytes() int64 {
+	if MaxUploadSizeMB <= 0 {
+		return 0
+	}
+	return int64(MaxUploadSizeMB) * 1024 * 1024
+}
+
 var ExplorerCacheEnabled = false // After my test, enable this will make the server slower...
 var ExplorerCacheTimeout = 600   // Second
 
