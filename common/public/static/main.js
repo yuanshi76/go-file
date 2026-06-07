@@ -111,6 +111,22 @@ function byte2mb(n) {
     return n.toFixed(2);
 }
 
+// firstOversizedFile returns the first file exceeding the configured upload
+// size limit, or null when every file is within the limit (or no limit set).
+function firstOversizedFile(files) {
+    let limitMb = window.maxUploadSizeMB || 0;
+    if (limitMb <= 0) {
+        return null;
+    }
+    let limitBytes = limitMb * 1024 * 1024;
+    for (let i = 0; i < files.length; i++) {
+        if (files[i].size > limitBytes) {
+            return files[i];
+        }
+    }
+    return null;
+}
+
 function uploadFile() {
     let fileUploadCard = document.getElementById('fileUploadCard');
     let fileUploadTitle = document.getElementById('fileUploadTitle');
@@ -120,6 +136,12 @@ function uploadFile() {
     let files = document.getElementById('fileInput').files;
     let description = document.getElementById("fileUploadDescription").value;
     if (files.length === 0 && description === "") {
+        return;
+    }
+    let oversized = firstOversizedFile(files);
+    if (oversized) {
+        fileUploadCard.style.display = 'none';
+        showMessage(`文件 ${oversized.name}（${byte2mb(oversized.size)} MB）超过上传大小限制 ${window.maxUploadSizeMB} MB`, true);
         return;
     }
     closeUploadModal();
@@ -193,12 +215,20 @@ function uploadImage() {
     imageUploadStatus.innerText = "上传中..."
 
     let files = document.getElementById('fileInput').files;
-    let formData = new FormData();
+    let images = [];
     for (let i = 0; i < files.length; i++) {
         if (files[i]['type'].split('/')[0] === 'image') {
-            formData.append("image", files[i]);
+            images.push(files[i]);
         }
     }
+    let oversized = firstOversizedFile(images);
+    if (oversized) {
+        document.getElementById("promptBox").style.display = "none";
+        showMessage(`图片 ${oversized.name}（${byte2mb(oversized.size)} MB）超过上传大小限制 ${window.maxUploadSizeMB} MB`, true);
+        return;
+    }
+    let formData = new FormData();
+    images.forEach(img => formData.append("image", img));
 
     let fileUploader = new XMLHttpRequest();
     fileUploader.upload.addEventListener("progress", ev => {
