@@ -78,6 +78,12 @@ func main() {
 	store.Options(sessions.Options{
 		Path:     "/",
 		HttpOnly: true,
+		// MaxAge MUST be > 0. The Redis-backed store treats MaxAge <= 0 as
+		// "delete this session" on every Save, so a missing MaxAge silently
+		// wipes the login right after it is set (cookie store tolerates 0 by
+		// keeping the data inline, which masked the bug in local testing).
+		// 30 days, matching the store's own default session lifetime.
+		MaxAge: 86400 * 30,
 		// Lax lets normal top-level navigations carry the cookie while blocking
 		// it on cross-site POSTs, which mitigates CSRF. Secure is opt-in via
 		// COOKIE_SECURE=true for HTTPS deployments (can't be unconditional or

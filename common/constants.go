@@ -57,11 +57,18 @@ var (
 	VideoDownloadPermission = RoleCommonUser
 )
 
+// Per-IP request budgets, counted per minute. These must leave room for normal
+// browsing: one page can fire several sub-requests, and an image gallery or a
+// burst of file clicks all share DownloadRateLimit, so the old value of 10 was
+// tripped by ordinary use. Static assets under /public/ are exempt entirely
+// (see middleware/rate-limit.go), so GlobalWebRateLimit now only counts page
+// navigations. CriticalRateLimit stays strict on purpose: it guards the login
+// endpoint against brute force.
 var (
-	GlobalApiRateLimit = 20
-	GlobalWebRateLimit = 60
-	DownloadRateLimit  = 10
-	CriticalRateLimit  = 3
+	GlobalApiRateLimit = 60
+	GlobalWebRateLimit = 120
+	DownloadRateLimit  = 120
+	CriticalRateLimit  = 5
 )
 
 const (

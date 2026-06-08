@@ -5,41 +5,49 @@ import (
 	"github.com/gin-gonic/gin"
 	"go-file/common"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
 
-var timeFormat = "2006-01-02T15:04:05.000Z"
-
+// rateLimitHelper is a correct fixed-window limiter built on INCR + EXPIRE.
+//
+// The previous list-based implementation was buggy: the key was never given a
+// TTL and the 429 branch neither pushed nor trimmed, so once a window filled
+// up the "oldest" entry was frozen and the client could stay locked out far
+// longer than a minute (and the key leaked in Redis forever). INCR is atomic,
+// the EXPIRE on the first hit makes the window self-reset, and a Redis hiccup
+// fails open instead of locking everyone out.
 func rateLimitHelper(c *gin.Context, maxRequestPerMinute int, mark string) {
 	ctx := context.Background()
 	rdb := common.RDB
 	key := "rateLimit:" + mark + c.ClientIP()
-	listLength, err := rdb.LLen(ctx, key).Result()
+	count, err := rdb.Incr(ctx, key).Result()
 	if err != nil {
-		common.SysError("rate limit LLen failed: " + err.Error())
+		common.SysError("rate limit INCR failed: " + err.Error())
+		return // fail open: never block real users because Redis blipped
 	}
-	if listLength < int64(maxRequestPerMinute) {
-		rdb.LPush(ctx, key, time.Now().Format(timeFormat))
-	} else {
-		oldTimeStr, _ := rdb.LIndex(ctx, key, -1).Result()
-		oldTime, err := time.Parse(timeFormat, oldTimeStr)
-		if err != nil {
-			common.SysError("rate limit parse time failed: " + err.Error())
-			return
-		}
-		nowTime := time.Now()
-		// time.Since will return negative number!
-		// See: https://stackoverflow.com/questions/50970900/why-is-time-since-returning-negative-durations-on-windows
-		if nowTime.Sub(oldTime).Seconds() < 60 {
-			c.Status(http.StatusTooManyRequests)
-			c.Abort()
-			return
-		} else {
-			rdb.LPush(ctx, key, nowTime.Format(timeFormat))
-			rdb.LTrim(ctx, key, 0, int64(maxRequestPerMinute-1))
-		}
+	if count == 1 {
+		// First request in this window: start the 60s countdown.
+		rdb.Expire(ctx, key, time.Minute)
+	} else if ttl, terr := rdb.TTL(ctx, key).Result(); terr == nil && ttl < 0 {
+		// Defensive: a key left without a TTL (e.g. a crash between INCR and
+		// EXPIRE) would otherwise block this IP forever. Re-arm the window.
+		rdb.Expire(ctx, key, time.Minute)
 	}
+	if count > int64(maxRequestPerMinute) {
+		c.Status(http.StatusTooManyRequests)
+		c.Abort()
+	}
+}
+
+// isStaticAsset reports whether the request targets an embedded static file
+// (CSS/JS/icons). A single HTML page pulls in several of these, so counting
+// them against the per-minute web limit lets a few honest refreshes trip a
+// 429 that then locks the user out of the page itself. They are served from
+// memory and carry no abuse risk, so they are exempt from the global limit.
+func isStaticAsset(path string) bool {
+	return strings.HasPrefix(path, "/public/")
 }
 
 // memoryRateLimiter is a process-local sliding-window limiter used as a fallback
@@ -80,6 +88,10 @@ func memoryRateLimit(c *gin.Context, maxRequestPerMinute int, mark string) {
 
 func GlobalWebRateLimit() func(c *gin.Context) {
 	return func(c *gin.Context) {
+		if isStaticAsset(c.Request.URL.Path) {
+			c.Next()
+			return
+		}
 		if common.RedisEnabled {
 			rateLimitHelper(c, common.GlobalWebRateLimit, "GW")
 		} else {
