@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 	"go-file/common"
+	"go-file/controller"
 	"go-file/middleware"
 	"go-file/model"
 	"go-file/router"
@@ -51,6 +52,12 @@ func main() {
 
 	// Initialize options
 	model.InitOptionMap()
+
+	// Load archive secrets from the environment after options, so env-provided
+	// credentials take precedence over any persisted (non-secret) overrides.
+	common.LoadArchiveSecretsFromEnv()
+	// Start the cold-storage archival worker (no-op until enabled & configured).
+	controller.StartArchiveWorker()
 
 	// Persist the session secret so cookie sessions survive restarts.
 	common.InitSessionSecret()

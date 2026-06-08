@@ -136,12 +136,18 @@ func UploadFile(c *gin.Context) {
 			}
 		}
 		if saveToDatabase {
+			var size int64
+			if fi, statErr := os.Stat(savePath); statErr == nil {
+				size = fi.Size()
+			}
 			fileObj := &model.File{
-				Description: description,
-				Uploader:    uploader,
-				Time:        currentTime,
-				Link:        link,
-				Filename:    filename,
+				Description:  description,
+				Uploader:     uploader,
+				Time:         currentTime,
+				Link:         link,
+				Filename:     filename,
+				Size:         size,
+				StorageState: common.StorageLocal,
 			}
 			err = fileObj.Insert()
 			if err != nil {
@@ -208,6 +214,18 @@ func DownloadFile(c *gin.Context) {
 		// We may being attacked!
 		c.Status(403)
 		return
+	}
+	// If the file has been archived to cold storage, pull it back from the WebDAV
+	// channel before serving. Subsequent downloads within the retention window
+	// hit the local copy directly.
+	if fileObj, err := model.FileByLink(link); err == nil && fileObj != nil && fileObj.IsArchived() {
+		restored, rerr := EnsureLocalCopy(fileObj)
+		if rerr != nil {
+			common.SysError("restore archived file " + link + " failed: " + rerr.Error())
+			c.String(http.StatusBadGateway, "文件已归档至云端，取回失败，请稍后重试")
+			return
+		}
+		fullPath = restored
 	}
 	if strings.HasSuffix(fullPath, ".txt") && common.IsMobileUserAgent(c.Request.UserAgent()) {
 		content, err := os.ReadFile(fullPath)

@@ -27,6 +27,17 @@ func InitOptionMap() {
 	common.OptionMap["ImageDownloadPermission"] = strconv.Itoa(common.ImageDownloadPermission)
 	common.OptionMap["VideoDownloadPermission"] = strconv.Itoa(common.VideoDownloadPermission)
 	common.OptionMap["MaxUploadSizeMB"] = strconv.Itoa(common.MaxUploadSizeMB)
+	// Cold-storage archive settings (non-secret; secrets come from env vars).
+	common.OptionMap["ArchiveEnabled"] = strconv.FormatBool(common.ArchiveEnabled)
+	common.OptionMap["ArchiveAfterDays"] = strconv.Itoa(common.ArchiveAfterDays)
+	common.OptionMap["OSSBucket"] = common.OSSBucket
+	common.OptionMap["OSSRegion"] = common.OSSRegion
+	common.OptionMap["OSSEndpoint"] = common.OSSEndpoint
+	common.OptionMap["OSSAccessKeyID"] = common.OSSAccessKeyID
+	common.OptionMap["OSSKeyPrefix"] = common.OSSKeyPrefix
+	common.OptionMap["WebDAVBaseURL"] = common.WebDAVBaseURL
+	common.OptionMap["WebDAVUsername"] = common.WebDAVUsername
+	common.OptionMap["WebDAVRootPrefix"] = common.WebDAVRootPrefix
 	common.OptionMap["WebsiteName"] = "Go File"
 	common.OptionMap["FooterInfo"] = ""
 	common.OptionMap["Version"] = common.Version
@@ -47,6 +58,22 @@ func UpdateOption(key string, value string) error {
 			return errors.New("上传大小限制必须是不小于 0 的整数（0 表示不限制）")
 		}
 		value = strconv.Itoa(n)
+	}
+	if key == "ArchiveAfterDays" {
+		n, err := strconv.Atoi(strings.TrimSpace(value))
+		if err != nil || n <= 0 {
+			return errors.New("归档天数必须是大于 0 的整数")
+		}
+		value = strconv.Itoa(n)
+	}
+	if key == "ArchiveEnabled" {
+		value = strings.TrimSpace(value)
+		if value != "true" && value != "false" {
+			return errors.New("归档开关只能是 true 或 false")
+		}
+		if value == "true" && (common.OSSAccessKeySecret() == "" || common.WebDAVPassword() == "") {
+			return errors.New("未配置 OSS_ACCESS_KEY_SECRET / WEBDAV_PASSWORD 环境变量，无法启用归档")
+		}
 	}
 
 	// Save to database first
@@ -85,6 +112,39 @@ func updateOptionMap(key string, value string) {
 		if n, err := strconv.Atoi(value); err == nil && n >= 0 {
 			common.MaxUploadSizeMB = n
 		}
+	}
+	switch key {
+	case "ArchiveEnabled":
+		common.ArchiveEnabled = value == "true"
+	case "ArchiveAfterDays":
+		if n, err := strconv.Atoi(value); err == nil && n > 0 {
+			common.ArchiveAfterDays = n
+		}
+	case "OSSBucket":
+		common.OSSBucket = strings.TrimSpace(value)
+	case "OSSRegion":
+		common.OSSRegion = strings.TrimSpace(value)
+	case "OSSEndpoint":
+		common.OSSEndpoint = strings.TrimSpace(value)
+		// Auto-fill region from the endpoint when the admin left it blank.
+		if common.OSSRegion == "" {
+			if region := common.InferOSSRegion(common.OSSEndpoint); region != "" {
+				common.OSSRegion = region
+				common.OptionMap["OSSRegion"] = region
+			}
+		}
+	case "OSSAccessKeyID":
+		common.OSSAccessKeyID = strings.TrimSpace(value)
+	case "OSSKeyPrefix":
+		common.OSSKeyPrefix = strings.Trim(strings.TrimSpace(value), "/")
+		common.OptionMap["OSSKeyPrefix"] = common.OSSKeyPrefix
+	case "WebDAVBaseURL":
+		common.WebDAVBaseURL = strings.TrimSpace(value)
+	case "WebDAVUsername":
+		common.WebDAVUsername = strings.TrimSpace(value)
+	case "WebDAVRootPrefix":
+		common.WebDAVRootPrefix = strings.Trim(strings.TrimSpace(value), "/")
+		common.OptionMap["WebDAVRootPrefix"] = common.WebDAVRootPrefix
 	}
 	if key == "StatEnabled" {
 		common.StatEnabled = value == "true"

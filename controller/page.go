@@ -95,6 +95,11 @@ func GetManagePage(c *gin.Context) {
 		"MaxUploadSizeMB":         common.MaxUploadSizeMB,
 		"isAdmin":                 role == common.RoleAdminUser,
 		"StatEnabled":             common.StatEnabled,
+		"ArchiveEnabled":          common.ArchiveEnabled,
+		"ArchiveAfterDays":        common.ArchiveAfterDays,
+		// Whether the env-only secrets are present, so the UI can warn the admin
+		// before they try to enable archiving.
+		"ArchiveSecretsReady": common.OSSAccessKeySecret() != "" && common.WebDAVPassword() != "",
 	})
 }
 

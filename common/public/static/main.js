@@ -37,54 +37,55 @@ function onChooseBtnClicked(e) {
     e.preventDefault();
 }
 
-function deleteFile(id, link) {
-    fetch("/api/file", {
-        method: 'delete',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            id: id,
-            link: link
-        })
-    }).then(function (res) {
-        res.json().then(function (data) {
-            // showMessage(data.message);
-            if (!data.success) {
-                console.error(data.message);
-                showMessage(data.message, true);
-            } else {
-                document.getElementById("file-" + id).style.display = 'none';
-                showToast(`文件删除成功：${link}`)
-            }
-        })
-    });
+async function deleteFile(id, link) {
+    try {
+        let data = await requestJSON("/api/file", {
+            method: 'delete',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                id: id,
+                link: link
+            })
+        });
+        if (!data.success) {
+            console.error(data.message);
+            showMessage(data.message, true);
+        } else {
+            document.getElementById("file-" + id).style.display = 'none';
+            showToast(`文件删除成功：${link}`)
+        }
+    } catch (e) {
+        showMessage(`删除失败：${e.message}`, true);
+    }
 }
 
-function deleteImage() {
+async function deleteImage() {
     let e = document.getElementById("inputDeleteImage");
     if (e.value === "") return;
     let tmpList = e.value.split("/");
     let filename = tmpList[tmpList.length - 1];
 
-    fetch("/api/image", {
-        method: 'delete',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            filename: filename,
-        })
-    }).then(function (res) {
-        res.json().then(function (data) {
-            if (data.success) {
-                e.value = "";
-                showToast("图片已成功删除");
-            } else {
-                showToast(data.message, "danger");
-            }
-        })
-    });
+    try {
+        let data = await requestJSON("/api/image", {
+            method: 'delete',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                filename: filename,
+            })
+        });
+        if (data.success) {
+            e.value = "";
+            showToast("图片已成功删除");
+        } else {
+            showToast(data.message, "danger");
+        }
+    } catch (err) {
+        showToast(`删除失败：${err.message}`, "danger");
+    }
 }
 
 
@@ -166,22 +167,29 @@ function uploadFile() {
         fileUploadDetail.innerText = `处理中 ${byte2mb(ev.loaded)} MB / ${byte2mb(ev.total)} MB...`
     }, false);
     fileUploader.addEventListener("load", ev => {
-        fileUploadTitle.innerText = `已上传 ${files.length} 个文件`;
         if (fileUploader.status === 403) {
             location.href = "/login";
-        } else {
-            location.reload();
+            return;
         }
-        // setTimeout(()=>{
-        //     fileUploadCard.style.display = 'none';
-        // }, 5000);
+        if (fileUploader.status >= 200 && fileUploader.status < 400) {
+            fileUploadTitle.innerText = `已上传 ${files.length} 个文件`;
+            location.reload();
+            return;
+        }
+        // 上传失败：把服务器返回的具体原因展示给用户，便于定位问题。
+        fileUploadCard.style.display = 'none';
+        let detail = (fileUploader.responseText || "").trim();
+        let hint = detail !== "" ? detail : `服务器返回状态码 ${fileUploader.status}`;
+        showMessage(`文件上传失败：${hint}`, true);
+        console.error("upload failed", fileUploader.status, detail);
     }, false);
     fileUploader.addEventListener("error", ev => {
         if (fileUploader.status === 403) {
             location.href = "/login";
-        } else {
-            fileUploadTitle.innerText = `文件上传失败`;
+            return;
         }
+        fileUploadCard.style.display = 'none';
+        showMessage(`文件上传失败：网络错误或服务器无响应，请检查网络后重试`, true);
         console.error(ev);
     }, false);
     fileUploader.addEventListener("abort", ev => {
@@ -236,51 +244,70 @@ function uploadImage() {
         imageUploadProgress.value = Math.round(percent);
     }, false);
     fileUploader.addEventListener("load", ev => {
-        // Uploading is done.
+        // 上传完成。load 事件最后触发，作为状态文案的唯一来源，避免与
+        // readystatechange 互相覆盖。
+        if (fileUploader.status === 403) {
+            location.href = "/login";
+            return;
+        }
         if (fileUploader.status === 200) {
             imageUploadStatus.innerText = "文件上传成功";
-        } else if (fileUploader.status === 403) {
-            location.href = "/login";
+            return;
         }
+        // 上传失败：优先展示服务器返回的 message 字段，便于定位问题。
+        let hint = `服务器返回状态码 ${fileUploader.status}`;
+        let detail = (fileUploader.responseText || "").trim();
+        if (detail !== "") {
+            try {
+                let res = JSON.parse(detail);
+                hint = res && res.message ? res.message : detail;
+            } catch (e) {
+                hint = detail;
+            }
+        }
+        imageUploadStatus.innerText = `文件上传失败：${hint}`;
     }, false);
     fileUploader.addEventListener("error", ev => {
-        imageUploadStatus.innerText = "文件上传失败";
+        imageUploadStatus.innerText = "文件上传失败：网络错误或服务器无响应，请检查网络后重试";
         console.error(ev);
     }, false);
     fileUploader.addEventListener("abort", ev => {
         imageUploadStatus.innerText = "文件上传终止";
     }, false);
     fileUploader.addEventListener("readystatechange", ev => {
-        if (fileUploader.readyState === 4) {
-            let res = JSON.parse(fileUploader.response);
-            console.log(res);
-            if (fileUploader.status === 200) {
-                let filenames = res.data;
-                let imageUploadPanel = document.getElementById('imageUploadPanel');
-                filenames.forEach(filename => {
-                    let url = location.href + '/' + filename;
-                    imageUploadPanel.insertAdjacentHTML('afterbegin', `
-                <div class="field has-addons">
-                    <div class="control is-light is-expanded">
-                        <input class="input url-input" type="text" value="${url}" readonly>
-                    </div>
-                    <div class="control">
-                        <a class="button is-light" onclick="copyText('${url}')">
-                            复制链接
-                        </a>
-                    </div>
-                    <div class="control">
-                        <a class="button is-light" onclick="copyText('![${filename}](${url})')">
-                            复制 Markdown 代码
-                        </a>
-                    </div>
-                </div>
-                `);
-                });
-            } else if (fileUploader.status === 403) {
-                location.href = "/login";
-            }
+        // 只负责在成功时渲染图片链接面板，失败文案由 load 事件统一处理。
+        if (fileUploader.readyState !== 4 || fileUploader.status !== 200) {
+            return;
         }
+        let res;
+        try {
+            res = JSON.parse(fileUploader.response);
+        } catch (e) {
+            console.error("image upload: invalid success response", e);
+            return;
+        }
+        let filenames = res.data || [];
+        let imageUploadPanel = document.getElementById('imageUploadPanel');
+        filenames.forEach(filename => {
+            let url = location.href + '/' + filename;
+            imageUploadPanel.insertAdjacentHTML('afterbegin', `
+        <div class="field has-addons">
+            <div class="control is-light is-expanded">
+                <input class="input url-input" type="text" value="${url}" readonly>
+            </div>
+            <div class="control">
+                <a class="button is-light" onclick="copyText('${url}')">
+                    复制链接
+                </a>
+            </div>
+            <div class="control">
+                <a class="button is-light" onclick="copyText('![${filename}](${url})')">
+                    复制 Markdown 代码
+                </a>
+            </div>
+        </div>
+        `);
+        });
     });
     fileUploader.open("POST", "/api/image");
     fileUploader.send(formData);
@@ -351,11 +378,35 @@ function showGeneralModal(title, content) {
     showModal("generalModal");
 }
 
+// 统一的 JSON 接口请求封装：捕获网络错误与非 JSON 响应（如服务器 500 错误页），
+// 避免操作后“无任何反馈”导致用户无法定位问题。业务层面的失败仍由调用方读取
+// 返回的 success / message 字段处理。
+async function requestJSON(url, options) {
+    let response;
+    try {
+        response = await fetch(url, options);
+    } catch (e) {
+        throw new Error("网络错误或服务器无响应，请检查网络后重试");
+    }
+    let text = await response.text();
+    try {
+        return JSON.parse(text);
+    } catch (e) {
+        let detail = (text || "").trim();
+        throw new Error(detail !== "" ? `服务器异常：${detail}` : `服务器返回状态码 ${response.status}，且无有效响应`);
+    }
+}
+
 async function loadOptions() {
     let tab = document.getElementById('settingTab');
     let html = ""
-    let response = await fetch("/api/option");
-    let result = await response.json();
+    let result;
+    try {
+        result = await requestJSON("/api/option");
+    } catch (e) {
+        tab.innerHTML = `<p class="has-text-danger">选项加载失败：${e.message}</p>`;
+        return;
+    }
     if (result.success) {
         for (let i = 0; i < result.data.length; i++) {
             let key = result.data[i].key;
@@ -382,17 +433,22 @@ async function loadOptions() {
 async function updateOption(key, inputElementId, originValue = "") {
     let inputElement = document.getElementById(inputElementId);
     let value = inputElement.value;
-    let response = await fetch("/api/option", {
-        method: "PUT",
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            key: key,
-            value: value
-        })
-    });
-    let result = await response.json();
+    let result;
+    try {
+        result = await requestJSON("/api/option", {
+            method: "PUT",
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                key: key,
+                value: value
+            })
+        });
+    } catch (e) {
+        showToast(`更新失败：${e.message}`, "danger");
+        return;
+    }
     if (result.success) {
         showToast(`更新成功`, "success");
     } else {
@@ -409,14 +465,19 @@ async function updateUser(key, inputElementId) {
     if (value === "") return
     let data = {};
     data[key] = value;
-    let response = await fetch("/api/user", {
-        method: "PUT",
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(data)
-    });
-    let result = await response.json();
+    let result;
+    try {
+        result = await requestJSON("/api/user", {
+            method: "PUT",
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    } catch (e) {
+        showToast(`更新信息失败：${e.message}`, "danger");
+        return;
+    }
     if (result.success) {
         showToast(`更新信息成功`, "success");
     } else {
@@ -434,14 +495,19 @@ async function createUser() {
         password: password,
         type: type
     }
-    let response = await fetch("/api/user", {
-        method: "POST",
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(data)
-    });
-    let result = await response.json();
+    let result;
+    try {
+        result = await requestJSON("/api/user", {
+            method: "POST",
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    } catch (e) {
+        showToast(`添加用户失败：${e.message}`, "danger");
+        return;
+    }
     if (result.success) {
         showToast(`添加用户成功`, "success");
     } else {
@@ -458,14 +524,19 @@ async function manageUser() {
         username: username,
         action: action,
     }
-    let response = await fetch("/api/manage_user", {
-        method: "PUT",
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(data)
-    });
-    let result = await response.json();
+    let result;
+    try {
+        result = await requestJSON("/api/manage_user", {
+            method: "PUT",
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    } catch (e) {
+        showToast(`操作失败：${e.message}`, "danger");
+        return;
+    }
     if (result.success) {
         showToast(`操作成功`, "success");
     } else {
@@ -474,13 +545,18 @@ async function manageUser() {
 }
 
 async function generateNewToken() {
-    let response = await fetch("/api/token", {
-        method: "POST",
-        headers: {
-            'Content-Type': 'application/json'
-        }
-    });
-    let result = await response.json();
+    let result;
+    try {
+        result = await requestJSON("/api/token", {
+            method: "POST",
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+    } catch (e) {
+        showToast(`操作失败：${e.message}`, "danger");
+        return;
+    }
     if (result.success) {
         showToast(`Token 已重置为：${result.data}`, "success");
     } else {

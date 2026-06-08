@@ -100,22 +100,29 @@
                                                     let currentVersion = "{{.option.Version}}";
                                                     let checkUpdateBtn = document.getElementById("checkUpdateBtn");
                                                     checkUpdateBtn.className += " is-loading";
-                                                    let res = await fetch("https://api.github.com/repos/songquanpeng/go-file/releases/latest");
-                                                    res = await res.json();
-                                                    if (res.tag_name === currentVersion) {
-                                                        showToast("已是最新版本");
-                                                    } else {
-                                                        let html = marked.parse(res.body);
-                                                        html += `<div class="field is-grouped is-grouped-right">`;
-                                                        res.assets.forEach(function (asset) {
-                                                            html += `<div class="control">
-                                                                <a class="button is-light" href="${asset.browser_download_url}" download="${asset.name}">下载 ${asset.name}</a>
-                                                            </div>`;
-                                                        });
-                                                        html += `</div>`;
-                                                        showGeneralModal(`新版本：${res.tag_name}`, html);
+                                                    try {
+                                                        let res = await fetch("https://api.github.com/repos/songquanpeng/go-file/releases/latest");
+                                                        res = await res.json();
+                                                        if (res.tag_name === currentVersion) {
+                                                            showToast("已是最新版本");
+                                                        } else {
+                                                            let html = marked.parse(res.body);
+                                                            html += `<div class="field is-grouped is-grouped-right">`;
+                                                            res.assets.forEach(function (asset) {
+                                                                html += `<div class="control">
+                                                                    <a class="button is-light" href="${asset.browser_download_url}" download="${asset.name}">下载 ${asset.name}</a>
+                                                                </div>`;
+                                                            });
+                                                            html += `</div>`;
+                                                            showGeneralModal(`新版本：${res.tag_name}`, html);
+                                                        }
+                                                    } catch (e) {
+                                                        // 检查更新失败（如网络异常或 GitHub 接口限流），给出明确提示而非一直转圈。
+                                                        showToast("检查更新失败：无法连接到 GitHub，请稍后重试", "danger");
+                                                        console.error(e);
+                                                    } finally {
+                                                        checkUpdateBtn.className = checkUpdateBtn.className.replace(' is-loading', '');
                                                     }
-                                                    checkUpdateBtn.className = checkUpdateBtn.className.replace(' is-loading', '');
                                                 }
                                             </script>
                                             {{if .StatEnabled}}
@@ -128,8 +135,15 @@
                                                 // https://echarts.apache.org/examples/zh/index.html
                                                 (async function () {
                                                     let dom = document.getElementById("reqChart");
-                                                    let res = await fetch("/api/stat/req");
-                                                    let data = await res.json();
+                                                    let data;
+                                                    try {
+                                                        let res = await fetch("/api/stat/req");
+                                                        data = await res.json();
+                                                    } catch (e) {
+                                                        dom.innerHTML = '<p class="has-text-danger" style="padding:1rem">统计数据加载失败：无法获取请求统计，请刷新页面重试</p>';
+                                                        console.error(e);
+                                                        return;
+                                                    }
 
                                                     let myChart = echarts.init(dom, null, {
                                                         renderer: 'canvas',
@@ -169,8 +183,15 @@
                                                 })();
                                                 (async function () {
                                                     let dom = document.getElementById("ipChart");
-                                                    let res = await fetch("/api/stat/ip");
-                                                    let data = await res.json();
+                                                    let data;
+                                                    try {
+                                                        let res = await fetch("/api/stat/ip");
+                                                        data = await res.json();
+                                                    } catch (e) {
+                                                        dom.innerHTML = '<p class="has-text-danger" style="padding:1rem">统计数据加载失败：无法获取 IP 统计，请刷新页面重试</p>';
+                                                        console.error(e);
+                                                        return;
+                                                    }
 
                                                     let myChart = echarts.init(dom, null, {
                                                         renderer: 'canvas',
@@ -215,8 +236,15 @@
                                                 })();
                                                 (async function () {
                                                     let dom = document.getElementById("urlChart");
-                                                    let res = await fetch("/api/stat/url");
-                                                    let data = await res.json();
+                                                    let data;
+                                                    try {
+                                                        let res = await fetch("/api/stat/url");
+                                                        data = await res.json();
+                                                    } catch (e) {
+                                                        dom.innerHTML = '<p class="has-text-danger" style="padding:1rem">统计数据加载失败：无法获取 URL 统计，请刷新页面重试</p>';
+                                                        console.error(e);
+                                                        return;
+                                                    }
 
                                                     let myChart = echarts.init(dom, null, {
                                                         renderer: 'canvas',
@@ -470,6 +498,122 @@
                                                                onclick="updateOption('MaxUploadSizeMB', 'inputMaxUploadSize')">
                                                                 更新
                                                             </a>
+                                                        </div>
+                                                    </div>
+                                                    <h3>冷存储归档</h3>
+                                                    <p class="help">
+                                                        超过指定天数未访问的文件会上传至 OSS 并清除本地副本，页面信息保留；
+                                                        下载/预览时经 WebDAV 免费通道自动取回。
+                                                        密钥需通过环境变量
+                                                        <code>OSS_ACCESS_KEY_SECRET</code>、<code>WEBDAV_PASSWORD</code> 配置。
+                                                        {{if not .ArchiveSecretsReady}}
+                                                        <strong style="color:#cc0f35;">当前未检测到上述环境变量，无法启用归档。</strong>
+                                                        {{end}}
+                                                    </p>
+                                                    <label class="label">启用归档：</label>
+                                                    <div class="field has-addons">
+                                                        <p class="control">
+                                                    <span class="select">
+                                                      <select id="ArchiveEnabled" onchange="updateOption('ArchiveEnabled', 'ArchiveEnabled', '{{.ArchiveEnabled}}')">
+                                                          <option value="false">不启用</option>
+                                                          <option value="true">启用</option>
+                                                      </select>
+                                                    </span>
+                                                        </p>
+                                                    </div>
+                                                    <script>
+                                                        (function () {
+                                                            document.getElementById('ArchiveEnabled').value = "{{.ArchiveEnabled}}";
+                                                        })();
+                                                    </script>
+                                                    <label class="label">归档天数（超过此天数未访问则归档）：</label>
+                                                    <div class="field has-addons">
+                                                        <div class="control is-light is-expanded">
+                                                            <input class="input" id="inputArchiveAfterDays" type="number"
+                                                                   min="1" step="1" value="{{.ArchiveAfterDays}}" placeholder="默认 7">
+                                                        </div>
+                                                        <div class="control">
+                                                            <a class="button is-light" onclick="updateOption('ArchiveAfterDays', 'inputArchiveAfterDays')">更新</a>
+                                                        </div>
+                                                    </div>
+                                                    <label class="label">OSS Bucket：</label>
+                                                    <div class="field has-addons">
+                                                        <div class="control is-light is-expanded">
+                                                            <input class="input" id="inputOSSBucket" type="text"
+                                                                   value="{{.option.OSSBucket}}" placeholder="例如 my-bucket">
+                                                        </div>
+                                                        <div class="control">
+                                                            <a class="button is-light" onclick="updateOption('OSSBucket', 'inputOSSBucket')">更新</a>
+                                                        </div>
+                                                    </div>
+                                                    <label class="label">OSS Endpoint：</label>
+                                                    <div class="field has-addons">
+                                                        <div class="control is-light is-expanded">
+                                                            <input class="input" id="inputOSSEndpoint" type="text"
+                                                                   value="{{.option.OSSEndpoint}}" placeholder="https://oss-cn-beijing.aliyuncs.com">
+                                                        </div>
+                                                        <div class="control">
+                                                            <a class="button is-light" onclick="updateOption('OSSEndpoint', 'inputOSSEndpoint')">更新</a>
+                                                        </div>
+                                                    </div>
+                                                    <label class="label">OSS Region（留空则按 Endpoint 自动推断）：</label>
+                                                    <div class="field has-addons">
+                                                        <div class="control is-light is-expanded">
+                                                            <input class="input" id="inputOSSRegion" type="text"
+                                                                   value="{{.option.OSSRegion}}" placeholder="cn-beijing">
+                                                        </div>
+                                                        <div class="control">
+                                                            <a class="button is-light" onclick="updateOption('OSSRegion', 'inputOSSRegion')">更新</a>
+                                                        </div>
+                                                    </div>
+                                                    <label class="label">OSS AccessKey ID（也可用环境变量 OSS_ACCESS_KEY_ID）：</label>
+                                                    <div class="field has-addons">
+                                                        <div class="control is-light is-expanded">
+                                                            <input class="input" id="inputOSSAccessKeyID" type="text"
+                                                                   value="{{.option.OSSAccessKeyID}}" placeholder="LTAI...">
+                                                        </div>
+                                                        <div class="control">
+                                                            <a class="button is-light" onclick="updateOption('OSSAccessKeyID', 'inputOSSAccessKeyID')">更新</a>
+                                                        </div>
+                                                    </div>
+                                                    <label class="label">OSS 对象前缀（可选）：</label>
+                                                    <div class="field has-addons">
+                                                        <div class="control is-light is-expanded">
+                                                            <input class="input" id="inputOSSKeyPrefix" type="text"
+                                                                   value="{{.option.OSSKeyPrefix}}" placeholder="例如 go-file">
+                                                        </div>
+                                                        <div class="control">
+                                                            <a class="button is-light" onclick="updateOption('OSSKeyPrefix', 'inputOSSKeyPrefix')">更新</a>
+                                                        </div>
+                                                    </div>
+                                                    <label class="label">WebDAV Base URL（指向同一存储）：</label>
+                                                    <div class="field has-addons">
+                                                        <div class="control is-light is-expanded">
+                                                            <input class="input" id="inputWebDAVBaseURL" type="text"
+                                                                   value="{{.option.WebDAVBaseURL}}" placeholder="https://dav.example.com/dav">
+                                                        </div>
+                                                        <div class="control">
+                                                            <a class="button is-light" onclick="updateOption('WebDAVBaseURL', 'inputWebDAVBaseURL')">更新</a>
+                                                        </div>
+                                                    </div>
+                                                    <label class="label">WebDAV 用户名：</label>
+                                                    <div class="field has-addons">
+                                                        <div class="control is-light is-expanded">
+                                                            <input class="input" id="inputWebDAVUsername" type="text"
+                                                                   value="{{.option.WebDAVUsername}}" placeholder="用户名">
+                                                        </div>
+                                                        <div class="control">
+                                                            <a class="button is-light" onclick="updateOption('WebDAVUsername', 'inputWebDAVUsername')">更新</a>
+                                                        </div>
+                                                    </div>
+                                                    <label class="label">WebDAV 根前缀（可选，需与 OSS 对象前缀指向同一目录）：</label>
+                                                    <div class="field has-addons">
+                                                        <div class="control is-light is-expanded">
+                                                            <input class="input" id="inputWebDAVRootPrefix" type="text"
+                                                                   value="{{.option.WebDAVRootPrefix}}" placeholder="例如 go-file">
+                                                        </div>
+                                                        <div class="control">
+                                                            <a class="button is-light" onclick="updateOption('WebDAVRootPrefix', 'inputWebDAVRootPrefix')">更新</a>
                                                         </div>
                                                     </div>
                                                     <h3>统计设置</h3>
