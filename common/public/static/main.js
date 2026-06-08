@@ -397,39 +397,6 @@ async function requestJSON(url, options) {
     }
 }
 
-async function loadOptions() {
-    let tab = document.getElementById('settingTab');
-    let html = ""
-    let result;
-    try {
-        result = await requestJSON("/api/option");
-    } catch (e) {
-        tab.innerHTML = `<p class="has-text-danger">选项加载失败：${e.message}</p>`;
-        return;
-    }
-    if (result.success) {
-        for (let i = 0; i < result.data.length; i++) {
-            let key = result.data[i].key;
-            let value = result.data[i].value;
-            html += `
-            <div>
-                <label class="label">${key}</label>
-                <div class="field has-addons">
-                    <p class="control is-expanded">
-                        <input class="input" id="inputOption${key}" type="text" placeholder="请输入新的配置" value="${value}">
-                    </p>
-                    <p class="control">
-                        <a class="button" onclick="updateOption('${key}', 'inputOption${key}')">提交</a>
-                    </p>
-                </div>
-            </div>`;
-        }
-    } else {
-        html = `<p>选项加载失败：${result.message}</p>`
-    }
-    tab.innerHTML = html;
-}
-
 async function updateOption(key, inputElementId, originValue = "") {
     let inputElement = document.getElementById(inputElementId);
     let value = inputElement.value;
