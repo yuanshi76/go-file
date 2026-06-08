@@ -1,0 +1,75 @@
+# go-file + redis 部署编排
+#
+# 所有 OSS / WebDAV / 归档配置均通过环境变量注入(环境变量优先于设置页中的值)。
+#
+# 使用方法:
+#   1. 把下面所有「请改成...」的占位值替换为你的真实配置
+#   2. 注意 Redis 密码出现在 3 处(redis 服务的 command、healthcheck,
+#      以及 go-file 的 REDIS_CONN_STRING),三处必须完全一致
+#   3. 启动: docker compose up -d
+#   4. 修改本文件后需重建容器才生效: docker compose up -d
+#
+# 提醒:本文件含明文密钥,务必加入 .gitignore,不要提交到仓库。
+
+networks:
+  go-file-net:
+    driver: bridge        # 自定义桥接网络,两个容器通过服务名互访
+
+services:
+  go-file:
+    image: ghcr.io/yuanshi76/go-file:latest
+    container_name: go-file
+    ports:
+      - "3000:3000"       # 宿主机端口:容器端口
+    volumes:
+      - ./data:/data      # SQLite 库与本地文件,务必持久化
+    environment:
+      # ================= 冷存储归档:总开关 =================
+      ARCHIVE_ENABLED: "true"            # true 启用归档;关闭填 false
+      ARCHIVE_AFTER_DAYS: "7"            # 多少天未访问后归档至 OSS(正整数)
+
+      # ================= OSS 上传通道(付费)=================
+      OSS_BUCKET: "请改成你的OSS_Bucket名"
+      OSS_ENDPOINT: "https://oss-cn-beijing.aliyuncs.com"   # 改成你的 Endpoint
+      OSS_REGION: "cn-beijing"           # 可留空,会从 Endpoint 自动推断
+      OSS_KEY_PREFIX: "go-file"          # 对象键前缀(可选,留空则放桶根)
+      OSS_ACCESS_KEY_ID: "请改成你的OSS_AccessKeyID"
+      OSS_ACCESS_KEY_SECRET: "请改成你的OSS_AccessKeySecret"   # 密钥
+      # OSS_SECURITY_TOKEN: "STS临时令牌(可选)"
+
+      # ================= WebDAV 下载通道(免费)=================
+      # WebDAV 必须指向与 OSS Bucket 相同的后端存储,才能读到 OSS 上传的对象
+      WEBDAV_BASE_URL: "请改成你的WebDAV地址,如 https://dav.example.com"
+      WEBDAV_USERNAME: "请改成你的WebDAV用户名"
+      WEBDAV_PASSWORD: "请改成你的WebDAV密码"   # 密钥
+      WEBDAV_ROOT_PREFIX: ""             # WebDAV 路径前缀(可选)
+
+      # ================= 应用配置 =================
+      SESSION_SECRET: "请改成一段随机字符串"   # 会话签名密钥
+      ADMIN_PASSWORD: "请改成初始管理员密码"   # 首次启动建库用
+      COOKIE_SECURE: "false"             # 经 HTTPS 反代时改为 true
+
+      # ================= Redis(密码需与下方 redis 服务一致)=================
+      REDIS_CONN_STRING: "redis://:请改成Redis密码@redis:6379"
+    depends_on:
+      redis:
+        condition: service_healthy   # 等 Redis 健康后再启动,避免启动时 Ping 失败
+    networks:
+      - go-file-net
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: go-file-redis
+    # 不对宿主机暴露 6379,仅容器间通过内部网络访问,更安全
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "请改成Redis密码"]
+    volumes:
+      - ./redis-data:/data           # Redis 持久化(可选)
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "请改成Redis密码", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - go-file-net
+    restart: unless-stopped

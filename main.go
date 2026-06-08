@@ -53,9 +53,10 @@ func main() {
 	// Initialize options
 	model.InitOptionMap()
 
-	// Load archive secrets from the environment after options, so env-provided
-	// credentials take precedence over any persisted (non-secret) overrides.
-	common.LoadArchiveSecretsFromEnv()
+	// Load archive credentials and OSS/WebDAV configuration from the environment
+	// after options, so env-provided values take precedence over any persisted
+	// (settings-page) overrides.
+	common.LoadArchiveFromEnv()
 	// Start the cold-storage archival worker (no-op until enabled & configured).
 	controller.StartArchiveWorker()
 

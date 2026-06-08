@@ -5,3 +5,10 @@ build
 *.exe
 *.db
 *.db-journal
+
+# 本地真实密钥与数据,禁止提交
+# docker-compose.yml 仅含占位符,作为部署模板提交;真实密钥请写入下面的本地覆盖文件
+docker-compose.override.yml
+go-file.env
+data/
+redis-data/
