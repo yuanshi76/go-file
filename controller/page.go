@@ -97,9 +97,13 @@ func GetManagePage(c *gin.Context) {
 		"StatEnabled":             common.StatEnabled,
 		"ArchiveEnabled":          common.ArchiveEnabled,
 		"ArchiveAfterDays":        common.ArchiveAfterDays,
-		// Whether the env-only secrets are present, so the UI can warn the admin
-		// before they try to enable archiving.
+		// Archive configuration is environment-driven and read-only in the UI.
+		// These flags let the page show the effective readiness state so the admin
+		// can tell at a glance whether the env vars are wired up correctly.
 		"ArchiveSecretsReady": common.OSSAccessKeySecret() != "" && common.WebDAVPassword() != "",
+		"OSSConfigReady":      common.OSSConfigReady(),
+		"WebDAVConfigReady":   common.WebDAVConfigReady(),
+		"ArchiveReady":        common.ArchiveReady(),
 	})
 }
 
