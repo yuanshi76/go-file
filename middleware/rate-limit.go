@@ -24,8 +24,18 @@ func rateLimitHelper(c *gin.Context, maxRequestPerMinute int, mark string) {
 	key := "rateLimit:" + mark + c.ClientIP()
 	count, err := rdb.Incr(ctx, key).Result()
 	if err != nil {
-		common.SysError("rate limit INCR failed: " + err.Error())
-		return // fail open: never block real users because Redis blipped
+		// A leftover key from the old list-based limiter holds a non-string
+		// value, so INCR reports WRONGTYPE. Self-heal by dropping the stale key
+		// and re-counting; the next request on this key behaves normally and the
+		// error stops recurring without any manual Redis cleanup.
+		if strings.Contains(err.Error(), "WRONGTYPE") {
+			rdb.Del(ctx, key)
+			count, err = rdb.Incr(ctx, key).Result()
+		}
+		if err != nil {
+			common.SysError("rate limit INCR failed: " + err.Error())
+			return // fail open: never block real users because Redis blipped
+		}
 	}
 	if count == 1 {
 		// First request in this window: start the 60s countdown.

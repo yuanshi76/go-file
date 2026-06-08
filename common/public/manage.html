@@ -128,164 +128,172 @@
                                             {{if .StatEnabled}}
                                             <script src="/public/lib/echarts.min.js"></script>
 
-                                            <div id="reqChart" style="height: 500px"></div>
-                                            <div id="urlChart" style="height: 500px"></div>
-                                            <div id="ipChart" style="height: 500px"></div>
+                                            <div id="statError" class="notification is-danger" style="display:none"></div>
+
+                                            <div class="columns is-multiline" id="statCards">
+                                                <div class="column is-one-quarter">
+                                                    <div class="box has-text-centered">
+                                                        <p class="heading">文件总数</p>
+                                                        <p class="title" id="cardTotalFiles">-</p>
+                                                    </div>
+                                                </div>
+                                                <div class="column is-one-quarter">
+                                                    <div class="box has-text-centered">
+                                                        <p class="heading">总存储占用</p>
+                                                        <p class="title" id="cardTotalSize">-</p>
+                                                    </div>
+                                                </div>
+                                                <div class="column is-one-quarter">
+                                                    <div class="box has-text-centered">
+                                                        <p class="heading">总下载次数</p>
+                                                        <p class="title" id="cardTotalDownloads">-</p>
+                                                    </div>
+                                                </div>
+                                                <div class="column is-one-quarter">
+                                                    <div class="box has-text-centered">
+                                                        <p class="heading">本地 / 冷存储</p>
+                                                        <p class="title" id="cardStorage">-</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div class="columns is-multiline">
+                                                <div class="column is-half">
+                                                    <div id="typeSizeChart" style="height: 360px"></div>
+                                                </div>
+                                                <div class="column is-half">
+                                                    <div id="typeCountChart" style="height: 360px"></div>
+                                                </div>
+                                                <div class="column is-half">
+                                                    <div id="storageChart" style="height: 360px"></div>
+                                                </div>
+                                                <div class="column is-half">
+                                                    <div id="trendChart" style="height: 360px"></div>
+                                                </div>
+                                                <div class="column is-full">
+                                                    <div id="downloadChart" style="height: 420px"></div>
+                                                </div>
+                                            </div>
+
+                                            <h4 class="title is-5">存储占用 Top 10</h4>
+                                            <table class="table is-fullwidth is-striped is-hoverable">
+                                                <thead>
+                                                    <tr><th>文件名</th><th>类型</th><th>大小</th><th>下载次数</th><th>上传者</th><th>状态</th></tr>
+                                                </thead>
+                                                <tbody id="largestTable"></tbody>
+                                            </table>
+
                                             <script>
                                                 // https://echarts.apache.org/examples/zh/index.html
                                                 (async function () {
-                                                    let dom = document.getElementById("reqChart");
-                                                    let data;
+                                                    const errBox = document.getElementById("statError");
+                                                    let payload;
                                                     try {
-                                                        let res = await fetch("/api/stat/req");
-                                                        data = await res.json();
+                                                        let res = await fetch("/api/stat/files");
+                                                        payload = await res.json();
                                                     } catch (e) {
-                                                        dom.innerHTML = '<p class="has-text-danger" style="padding:1rem">统计数据加载失败：无法获取请求统计，请刷新页面重试</p>';
+                                                        errBox.style.display = "block";
+                                                        errBox.textContent = "统计数据加载失败：无法获取文件统计，请刷新页面重试";
                                                         console.error(e);
                                                         return;
                                                     }
-
-                                                    let myChart = echarts.init(dom, null, {
-                                                        renderer: 'canvas',
-                                                        useDirtyRect: false
-                                                    });
-                                                    let names = [];
-                                                    let values = [];
-                                                    for (let i = 0; i < data.data.length; i++) {
-                                                        names.push(data.data[i].name);
-                                                        values.push(data.data[i].value);
-                                                    }
-                                                    let option = {
-                                                        title: {
-                                                            text: '访问趋势图'
-                                                        },
-                                                        xAxis: {
-                                                            type: 'category',
-                                                            data: names
-                                                        },
-                                                        yAxis: {
-                                                            type: 'value'
-                                                        },
-                                                        series: [
-                                                            {
-                                                                data: values,
-                                                                type: 'line',
-                                                                smooth: true
-                                                            }
-                                                        ]
-                                                    };
-
-                                                    if (option && typeof option === 'object') {
-                                                        myChart.setOption(option);
-                                                    }
-
-                                                    window.addEventListener('resize', myChart.resize);
-                                                })();
-                                                (async function () {
-                                                    let dom = document.getElementById("ipChart");
-                                                    let data;
-                                                    try {
-                                                        let res = await fetch("/api/stat/ip");
-                                                        data = await res.json();
-                                                    } catch (e) {
-                                                        dom.innerHTML = '<p class="has-text-danger" style="padding:1rem">统计数据加载失败：无法获取 IP 统计，请刷新页面重试</p>';
-                                                        console.error(e);
+                                                    if (!payload || !payload.success || !payload.data) {
+                                                        errBox.style.display = "block";
+                                                        errBox.textContent = "统计数据加载失败：" + ((payload && payload.message) || "未知错误");
                                                         return;
                                                     }
+                                                    const d = payload.data;
 
-                                                    let myChart = echarts.init(dom, null, {
-                                                        renderer: 'canvas',
-                                                        useDirtyRect: false
+                                                    function formatBytes(bytes) {
+                                                        bytes = Number(bytes) || 0;
+                                                        if (bytes < 1024) return bytes + " B";
+                                                        const units = ["KB", "MB", "GB", "TB", "PB"];
+                                                        let i = -1;
+                                                        do { bytes /= 1024; i++; } while (bytes >= 1024 && i < units.length - 1);
+                                                        return bytes.toFixed(2) + " " + units[i];
+                                                    }
+                                                    function fmtSizeTooltip(p) {
+                                                        return p.name + ": " + formatBytes(p.value) + " (" + p.percent + "%)";
+                                                    }
+
+                                                    document.getElementById("cardTotalFiles").textContent = d.total_files;
+                                                    document.getElementById("cardTotalSize").textContent = formatBytes(d.total_size);
+                                                    document.getElementById("cardTotalDownloads").textContent = d.total_downloads;
+                                                    document.getElementById("cardStorage").textContent = d.local_files + " / " + d.archived_files;
+
+                                                    const charts = [];
+                                                    function makeChart(id, option) {
+                                                        const dom = document.getElementById(id);
+                                                        const chart = echarts.init(dom, null, { renderer: "canvas", useDirtyRect: false });
+                                                        chart.setOption(option);
+                                                        charts.push(chart);
+                                                    }
+
+                                                    makeChart("typeSizeChart", {
+                                                        title: { text: "各类型存储占用", left: "center" },
+                                                        tooltip: { trigger: "item", formatter: fmtSizeTooltip },
+                                                        legend: { orient: "vertical", left: "left" },
+                                                        series: [{
+                                                            name: "存储占用", type: "pie", radius: ["40%", "70%"],
+                                                            data: d.type_size || [],
+                                                            emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: "rgba(0,0,0,0.5)" } }
+                                                        }]
                                                     });
 
-                                                    let option = {
-                                                        title: {
-                                                            text: '高频访问 IP',
-                                                            subtext: `Top ${data.data.length}`,
-                                                            left: 'center'
-                                                        },
-                                                        tooltip: {
-                                                            trigger: 'item'
-                                                        },
-                                                        legend: {
-                                                            orient: 'vertical',
-                                                            left: 'left'
-                                                        },
-                                                        series: [
-                                                            {
-                                                                name: '来自',
-                                                                type: 'pie',
-                                                                radius: '50%',
-                                                                data: data.data,
-                                                                emphasis: {
-                                                                    itemStyle: {
-                                                                        shadowBlur: 10,
-                                                                        shadowOffsetX: 0,
-                                                                        shadowColor: 'rgba(0, 0, 0, 0.5)'
-                                                                    }
-                                                                }
-                                                            }
-                                                        ]
-                                                    };
-
-                                                    if (option && typeof option === 'object') {
-                                                        myChart.setOption(option);
-                                                    }
-
-                                                    window.addEventListener('resize', myChart.resize);
-                                                })();
-                                                (async function () {
-                                                    let dom = document.getElementById("urlChart");
-                                                    let data;
-                                                    try {
-                                                        let res = await fetch("/api/stat/url");
-                                                        data = await res.json();
-                                                    } catch (e) {
-                                                        dom.innerHTML = '<p class="has-text-danger" style="padding:1rem">统计数据加载失败：无法获取 URL 统计，请刷新页面重试</p>';
-                                                        console.error(e);
-                                                        return;
-                                                    }
-
-                                                    let myChart = echarts.init(dom, null, {
-                                                        renderer: 'canvas',
-                                                        useDirtyRect: false
+                                                    makeChart("typeCountChart", {
+                                                        title: { text: "各类型文件数量", left: "center" },
+                                                        tooltip: { trigger: "item", formatter: "{b}: {c} ({d}%)" },
+                                                        legend: { orient: "vertical", left: "left" },
+                                                        series: [{
+                                                            name: "文件数量", type: "pie", radius: "60%",
+                                                            data: d.type_count || [],
+                                                            emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: "rgba(0,0,0,0.5)" } }
+                                                        }]
                                                     });
 
-                                                    let option = {
-                                                        title: {
-                                                            text: '高频访问 URL',
-                                                            subtext: `Top ${data.data.length}`,
-                                                            left: 'center'
-                                                        },
-                                                        tooltip: {
-                                                            trigger: 'item'
-                                                        },
-                                                        legend: {
-                                                            orient: 'vertical',
-                                                            left: 'left'
-                                                        },
-                                                        series: [
-                                                            {
-                                                                name: '来自',
-                                                                type: 'pie',
-                                                                radius: '50%',
-                                                                data: data.data,
-                                                                emphasis: {
-                                                                    itemStyle: {
-                                                                        shadowBlur: 10,
-                                                                        shadowOffsetX: 0,
-                                                                        shadowColor: 'rgba(0, 0, 0, 0.5)'
-                                                                    }
-                                                                }
-                                                            }
-                                                        ]
-                                                    };
+                                                    makeChart("storageChart", {
+                                                        title: { text: "存储状态分布", left: "center" },
+                                                        tooltip: { trigger: "item", formatter: "{b}: {c} ({d}%)" },
+                                                        legend: { orient: "vertical", left: "left" },
+                                                        series: [{
+                                                            name: "存储状态", type: "pie", radius: "60%",
+                                                            data: d.storage_state || [],
+                                                            emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: "rgba(0,0,0,0.5)" } }
+                                                        }]
+                                                    });
 
-                                                    if (option && typeof option === 'object') {
-                                                        myChart.setOption(option);
-                                                    }
+                                                    const trend = d.upload_trend || [];
+                                                    makeChart("trendChart", {
+                                                        title: { text: "每月上传趋势", left: "center" },
+                                                        tooltip: { trigger: "axis" },
+                                                        xAxis: { type: "category", data: trend.map(x => x.name) },
+                                                        yAxis: { type: "value" },
+                                                        series: [{ data: trend.map(x => x.value), type: "line", smooth: true, areaStyle: {} }]
+                                                    });
 
-                                                    window.addEventListener('resize', myChart.resize);
+                                                    const top = d.top_downloads || [];
+                                                    makeChart("downloadChart", {
+                                                        title: { text: "下载次数 Top 10", left: "center" },
+                                                        tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+                                                        grid: { left: "3%", right: "4%", bottom: "3%", containLabel: true },
+                                                        xAxis: { type: "value" },
+                                                        yAxis: { type: "category", data: top.map(x => x.filename).reverse() },
+                                                        series: [{ name: "下载次数", type: "bar", data: top.map(x => x.download_counter).reverse() }]
+                                                    });
+
+                                                    window.addEventListener("resize", () => charts.forEach(c => c.resize()));
+
+                                                    const tbody = document.getElementById("largestTable");
+                                                    (d.largest_files || []).forEach(f => {
+                                                        const tr = document.createElement("tr");
+                                                        const cells = [f.filename, f.category, formatBytes(f.size), f.download_counter, f.uploader, f.archived ? "冷存储" : "本地"];
+                                                        cells.forEach(v => {
+                                                            const td = document.createElement("td");
+                                                            td.textContent = v;
+                                                            tr.appendChild(td);
+                                                        });
+                                                        tbody.appendChild(tr);
+                                                    });
                                                 })();
                                             </script>
                                             {{end}}
@@ -567,7 +575,7 @@
                                                     </p>
                                                     {{end}}
                                                     <h3>统计设置</h3>
-                                                    <label class="label">是否启用访问数据统计：</label>
+                                                    <label class="label">是否启用文件数据统计：</label>
                                                     <div class="field has-addons">
                                                         <p class="control">
                                                     <span class="select">

@@ -35,11 +35,9 @@ func MaxUploadBytes() int64 {
 var ExplorerCacheEnabled = false // After my test, enable this will make the server slower...
 var ExplorerCacheTimeout = 600   // Second
 
+// StatEnabled gates the file-statistics dashboard on the manage page. The
+// dashboard is computed from the database, so it no longer depends on Redis.
 var StatEnabled = true
-var StatCacheTimeout = 24 // Hour
-var StatReqTimeout = 30   // Day
-var StatIPNum = 20
-var StatURLNum = 20
 
 const (
 	RoleGuestUser  = 0

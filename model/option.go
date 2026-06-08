@@ -49,9 +49,6 @@ func InitOptionMap() {
 }
 
 func UpdateOption(key string, value string) error {
-	if key == "StatEnabled" && value == "true" && !common.RedisEnabled {
-		return errors.New("未启用 Redis，无法启用统计功能")
-	}
 	if key == "MaxUploadSizeMB" {
 		n, err := strconv.Atoi(strings.TrimSpace(value))
 		if err != nil || n < 0 {
@@ -148,9 +145,5 @@ func updateOptionMap(key string, value string) {
 	}
 	if key == "StatEnabled" {
 		common.StatEnabled = value == "true"
-		if !common.RedisEnabled {
-			common.StatEnabled = false
-			common.OptionMap["StatEnabled"] = "false"
-		}
 	}
 }
