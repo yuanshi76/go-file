@@ -65,6 +65,13 @@ func main() {
 
 	// Initialize HTTP server
 	server := gin.Default()
+	// gin.Default() defaults MaxMultipartMemory to 32MB, which means any upload
+	// up to 32MB is buffered entirely in RAM before touching disk. On small-memory
+	// hosts that transient spike can exceed available memory and get the process
+	// OOM-killed by the host (cgroup OOMKilled stays false in that case), which
+	// looks like a crash-restart loop on uploads larger than ~30MB. Cap the in-RAM
+	// buffer at 8MB so larger uploads stream-spill to a temp file on disk instead.
+	server.MaxMultipartMemory = 8 << 20 // 8MB
 	server.SetHTMLTemplate(loadTemplate())
 
 	// Initialize session store
