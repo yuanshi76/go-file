@@ -270,8 +270,40 @@ func DownloadFile(c *gin.Context) {
 	} else {
 		c.File(fullPath)
 	}
-	// Update download counter
-	go func() {
-		model.UpdateDownloadCounter(link)
-	}()
+	// Update download counter — but only for a fresh, full download. An HTML5
+	// media player streams a file with many Range requests (seek/buffer), so
+	// counting every request inflates the number wildly (a 2h video play can
+	// register 100+ "downloads"). Skip seek/continuation ranges (bytes=N- with
+	// N>0) and only count the start of a transfer.
+	if c.Writer.Status() < 400 && isFreshDownload(c.Request) {
+		go func() {
+			model.UpdateDownloadCounter(link)
+		}()
+	}
+}
+
+// isFreshDownload reports whether the request is the start of a download rather
+// than a seek/continuation chunk of an in-progress media stream. A request with
+// no Range header is a full download; a single Range starting at byte 0 is the
+// first chunk of a playback session (counted once). Anything else — a range
+// starting past 0, a suffix range (bytes=-N), or a multi-range request — is
+// treated as streaming noise and not counted.
+func isFreshDownload(r *http.Request) bool {
+	rangeHeader := r.Header.Get("Range")
+	if rangeHeader == "" {
+		return true
+	}
+	const prefix = "bytes="
+	if !strings.HasPrefix(rangeHeader, prefix) {
+		return false
+	}
+	spec := strings.TrimPrefix(rangeHeader, prefix)
+	if strings.Contains(spec, ",") {
+		return false // multi-range → partial
+	}
+	dash := strings.IndexByte(spec, '-')
+	if dash < 0 {
+		return false
+	}
+	return strings.TrimSpace(spec[:dash]) == "0"
 }
