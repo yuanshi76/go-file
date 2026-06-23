@@ -1,0 +1,96 @@
+{
+  "$schema": "https://modelcontextprotocol.io/schema/2024-11-05/tools.json",
+  "description": "go-file AI API 的 MCP 工具定义。可直接用于实现 MCP server，或转换为 OpenAI/Anthropic function-calling 的 tools 列表。运行时需注入部署地址 (base_url) 与用户 token，并以 'Authorization: <token>' 头调用对应的 /api/ai/* 接口。",
+  "tools": [
+    {
+      "name": "list_files",
+      "description": "列出或搜索 go-file 暂存站中的文件，返回带元数据与下载地址的分页结果。用关键词缩小范围，再用返回项里的 id 或 download_url 做后续操作。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "q": {
+            "type": "string",
+            "description": "关键词，匹配文件名/描述/上传者/时间。留空返回全部。"
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1,
+            "description": "页码，从 1 开始。"
+          },
+          "page_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20,
+            "description": "每页数量，最大 100。"
+          }
+        },
+        "additionalProperties": false
+      },
+      "_http": { "method": "GET", "path": "/api/ai/files" }
+    },
+    {
+      "name": "get_file",
+      "description": "按 id 获取单个文件的元数据（文件名、大小、分类、是否归档、下载地址等）。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "description": "文件的数字 id。" }
+        },
+        "required": ["id"],
+        "additionalProperties": false
+      },
+      "_http": { "method": "GET", "path": "/api/ai/files/{id}" }
+    },
+    {
+      "name": "download_file",
+      "description": "按 id 下载文件的二进制内容。归档到冷存储的文件会自动取回。返回原始字节流（Content-Disposition 带文件名）。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "description": "要下载的文件 id。" }
+        },
+        "required": ["id"],
+        "additionalProperties": false
+      },
+      "_http": { "method": "GET", "path": "/api/ai/files/{id}/content" }
+    },
+    {
+      "name": "upload_file",
+      "description": "上传/回传一个文件到 go-file 暂存站。以 multipart/form-data 提交，字段名为 file。可附带 description。返回创建的文件记录（含 id 与 download_url）。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "type": "string",
+            "description": "本地待上传文件的路径（由 MCP server 读取后作为 multipart 字段 file 提交）。"
+          },
+          "description": {
+            "type": "string",
+            "description": "可选，文件描述。"
+          }
+        },
+        "required": ["file_path"],
+        "additionalProperties": false
+      },
+      "_http": { "method": "POST", "path": "/api/ai/files", "encoding": "multipart/form-data", "fileField": "file" }
+    },
+    {
+      "name": "get_stats",
+      "description": "获取文件维度统计：文件总数、总存储占用、总下载次数、本地/冷存储分布、各分类大小与数量、上传趋势、下载/体积 Top 榜。用于让 AI 概览整个存储。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "_http": { "method": "GET", "path": "/api/ai/stats" }
+    }
+  ],
+  "auth": {
+    "type": "apiKey",
+    "in": "header",
+    "name": "Authorization",
+    "note": "值为用户设置页生成的 token，兼容 'Bearer <token>'。"
+  }
+}

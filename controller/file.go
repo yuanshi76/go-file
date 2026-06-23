@@ -159,6 +159,37 @@ func UploadFile(c *gin.Context) {
 	c.Redirect(http.StatusSeeOther, "./")
 }
 
+// storeUploadedFile saves one multipart file under the canonical YYYY-MM
+// subfolder of root, de-duplicating the name with a timestamp on collision, and
+// returns the relative link and absolute path actually used. It mirrors the
+// naming convention of UploadFile so AI-uploaded files are indistinguishable
+// from web-uploaded ones.
+func storeUploadedFile(c *gin.Context, root string, file *multipart.FileHeader) (link, savePath string, err error) {
+	t := time.Now()
+	subfolder := t.Format("2006-01")
+	if err = common.MakeDirIfNotExist(filepath.Join(root, subfolder)); err != nil {
+		return "", "", fmt.Errorf("create folder: %w", err)
+	}
+	filename := filepath.Base(file.Filename)
+	link = fmt.Sprintf("%s/%s", subfolder, filename)
+	savePath = filepath.Join(root, subfolder, filename)
+	if _, statErr := os.Stat(savePath); statErr == nil {
+		// Name collision: suffix a timestamp, preserving the extension.
+		timestamp := t.Format("_2006-01-02_15-04-05")
+		ext := filepath.Ext(filename)
+		if ext == "" {
+			link += timestamp
+		} else {
+			link = subfolder + "/" + filename[:len(filename)-len(ext)] + timestamp + ext
+		}
+		savePath = filepath.Join(root, link)
+	}
+	if err = c.SaveUploadedFile(file, savePath); err != nil {
+		return "", "", fmt.Errorf("save uploaded file: %w", err)
+	}
+	return link, savePath, nil
+}
+
 func DeleteFile(c *gin.Context) {
 	var deleteRequest FileDeleteRequest
 	err := json.NewDecoder(c.Request.Body).Decode(&deleteRequest)

@@ -19,6 +19,8 @@ _✨ 文件分享工具，单可执行文件开箱即用；本分支在原版基
   ·
   <a href="#冷存储归档oss--webdav">冷存储归档</a>
   ·
+  <a href="#ai-可调用-apiai-适配">AI API</a>
+  ·
   <a href="#演示">截图展示</a>
 </p>
 
@@ -52,6 +54,11 @@ _✨ 文件分享工具，单可执行文件开箱即用；本分支在原版基
 
 ### 冷存储归档（OSS + WebDAV）
 - 长期未访问的文件自动上传到**阿里云 OSS**（付费通道，OSS V4 签名），本地仅留占位；用户访问时再经 **WebDAV**（免费通道）自动取回，取回后在保留窗口内再次归档，节省本地与带宽成本。详见 [冷存储归档](#冷存储归档oss--webdav)。
+
+### AI 适配
+- 新增机器友好的只读发现 + 上传/下载 **AI API**（`/api/ai/*`），让 AI 代理可自主检索、下载、回传文件并读取统计。
+- 针对**弱模型**（如 MiniMax-M2.5 + Hermes）做了专项优化：提供「按文件名一步下载」「先查后取」等单步接口，输入容错（可传 id 或文件名、容忍引号/空格），返回带自然语言 `summary` 提示。
+- 随附标准 [OpenAPI 3.0](./docs/openapi.yaml)、[MCP](./docs/mcp-tools.json) 与 [Hermes 工具集](./docs/hermes-tools.json) 三份 Schema，可直接接入主流 AI 框架。详见 [AI 可调用 API](#ai-可调用-apiai-适配)。
 
 ### 部署友好
 - **配置全面环境变量化**：所有 OSS / WebDAV / 归档参数均可通过环境变量注入，**环境变量优先于设置页的值**，且仅驻留内存、**绝不写入数据库**（密钥不落库）。
@@ -152,6 +159,41 @@ docker run -d --restart always -p 3000:3000 \
   - 例如作为 Typora 的 Image Uploader：[./script/typora.py](./script/typora.py)。
 - **权限**：默认访客可上传下载，可在 `管理 → 系统设置` 中调整。
 - **公网部署**：务必第一时间设置/修改管理员密码，并建议置于 HTTPS 反代之后并设 `COOKIE_SECURE=true`。
+
+## AI 可调用 API（AI 适配）
+
+为「让 AI 代理自主获取数据、下载与回传文件」设计的一组机器友好接口，统一挂在 `/api/ai/*`，返回 `{success, message, data}` 信封格式。
+
+### 鉴权
+- 在 `用户设置页` 生成 Token，请求时携带 HTTP 头 `Authorization: YOUR_TOKEN`（也兼容 `Bearer YOUR_TOKEN`）。
+- 仅 `GET /api/ai/manifest` 为公开自描述文档，无需鉴权；其余接口均需 Token。
+- 携带 `Authorization` 头的请求自动豁免 CSRF 校验，方便程序化调用。
+
+### 接口一览
+| 方法 & 路径 | 说明 |
+|------|------|
+| `GET /api/ai/manifest` | 自描述清单（公开），列出全部接口供 AI 自动发现 |
+| `GET /api/ai/find?q=&limit=` | 按文件名/关键词查找，返回候选与自然语言 `summary` |
+| `GET /api/ai/download?q=` | 按 id 或文件名**一步下载**，服务端解析最匹配项返回二进制 |
+| `GET /api/ai/files?q=&page=&page_size=` | 分页列出/搜索文件 |
+| `POST /api/ai/files` | 上传/回传文件（`multipart/form-data`，字段 `file` 可重复） |
+| `GET /api/ai/files/{id}` | 获取单个文件元数据 |
+| `GET /api/ai/files/{id}/content` | 下载文件二进制（归档至冷存储者自动取回后返回） |
+| `GET /api/ai/stats` | 文件维度统计（总数、占用、下载量、类型分布等） |
+
+### 弱模型友好
+针对 MiniMax-M2.5 等能力较弱模型，刻意提供**单步、按文件名即可完成**的接口：
+- `find` / `download` 的 `q` 既可是数字 id，也可是（部分）文件名，并容忍引号、空格、`7.0` 之类输入。
+- 返回里的 `summary` 字段是给模型的中文提示，便于其决定下一步。
+- 无需先查 id 再下载——直接 `download?q=年度报告` 即可。
+
+### 接入 Schema
+随仓库提供三份可直接使用的工具定义：
+- [`docs/openapi.yaml`](./docs/openapi.yaml)：标准 OpenAPI 3.0.3 规范。
+- [`docs/mcp-tools.json`](./docs/mcp-tools.json)：MCP 工具定义（list/get/download/upload/stats）。
+- [`docs/hermes-tools.json`](./docs/hermes-tools.json)：为 Hermes + 弱模型调优的 4 工具精简集，含推荐 system prompt 与端点映射。
+
+> 使用前把 Schema 中的 `base_url` / `server` 占位地址替换为你的实际部署地址，并注入 Token。
 
 ## 演示
 以下展示图片来自原版，交互一致，可能未及时更新。

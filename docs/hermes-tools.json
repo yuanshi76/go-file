@@ -1,0 +1,86 @@
+{
+  "_comment": "为 Hermes + 较弱模型（如 MiniMax-M2.5）调优的 go-file 工具集。工具刻意精简为 4 个、单步可完成、按文件名即可操作（无需记数字 id）。tools 数组为 OpenAI/Hermes function-calling 格式，可直接放进 Hermes 的 <tools> 段；运行时由你的 MCP/适配层注入 base_url 与 Authorization 头并调用对应 /api/ai/* 接口。",
+  "base_url": "http://你的部署地址:3000",
+  "auth": {
+    "type": "header",
+    "name": "Authorization",
+    "value": "<在用户设置页生成的 token>"
+  },
+  "recommended_system_prompt": "你可以调用工具来管理一个文件暂存站。规则：1) 用户要某个文件时，直接调用 download_file，参数 query 填用户说的文件名或关键词即可，不需要先查 id。2) 只有当你不确定文件是否存在、或要从多个里挑时，才先用 find_files。3) 上传文件用 upload_file，query 之外只需 file_path。4) 每次只调用一个工具，拿到结果后再决定下一步。5) 工具返回里的 summary 字段是给你的中文提示，按它行动。",
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "download_file",
+        "description": "下载一个文件。query 可以是文件名（如 \"季度报告.pdf\"）、关键词，或文件的数字 id。服务端会自动找到最匹配的文件并返回内容。这是下载的首选方式——不需要先知道 id。例：用户说\"把年度报告发我\"，就调用 download_file(query=\"年度报告\")。",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "文件名、关键词或数字 id。例：\"report.pdf\"、\"报告\"、\"7\"。"
+            }
+          },
+          "required": ["query"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "find_files",
+        "description": "按文件名或关键词查找文件，返回最匹配的几条（含 filename、id、大小、download_url）和一句中文 summary。当你不确定文件是否存在、或需要从多个候选里确认时使用。确认后可直接 download_file。",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "文件名或关键词，例：\"发票\"、\"2026 预算\"。"
+            },
+            "limit": {
+              "type": "integer",
+              "description": "最多返回几条，默认 5，最大 20。",
+              "default": 5
+            }
+          },
+          "required": ["query"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "upload_file",
+        "description": "上传/回传一个本地文件到暂存站。成功后返回该文件的 id 和 download_url。",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "file_path": {
+              "type": "string",
+              "description": "本地待上传文件的完整路径，例：\"/tmp/result.csv\"。"
+            },
+            "description": {
+              "type": "string",
+              "description": "可选，对文件的简短说明。"
+            }
+          },
+          "required": ["file_path"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "get_stats",
+        "description": "获取暂存站的整体统计：文件总数、总占用、总下载次数、各类型分布等。当用户问\"有多少文件/占用多大/最常下载的是哪些\"时使用。",
+        "parameters": { "type": "object", "properties": {} }
+      }
+    }
+  ],
+  "tool_to_endpoint": {
+    "download_file": { "method": "GET", "path": "/api/ai/download", "query_map": { "query": "q" }, "returns": "binary" },
+    "find_files": { "method": "GET", "path": "/api/ai/find", "query_map": { "query": "q", "limit": "limit" }, "returns": "json" },
+    "upload_file": { "method": "POST", "path": "/api/ai/files", "encoding": "multipart/form-data", "file_field": "file", "form_map": { "description": "description" }, "returns": "json" },
+    "get_stats": { "method": "GET", "path": "/api/ai/stats", "returns": "json" }
+  }
+}

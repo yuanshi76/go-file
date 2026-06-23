@@ -12,6 +12,23 @@ func setApiRouter(router *gin.Engine) {
 	router.POST("/api/file", middleware.FileUploadPermissionCheck(), middleware.UploadSizeLimit(), controller.UploadFile)
 	router.POST("/api/image", middleware.ImageUploadPermissionCheck(), middleware.UploadSizeLimit(), controller.UploadImage)
 	router.GET("/api/notice", controller.GetNotice)
+	// AI API: machine-friendly file discovery + download for AI agents.
+	// The manifest is public (self-describing, no secrets); everything else is
+	// token-authenticated via the standard Authorization header.
+	router.GET("/api/ai/manifest", controller.AIManifest)
+	aiAuth := router.Group("/api/ai")
+	aiAuth.Use(middleware.ApiAuth())
+	{
+		// Weak-model-friendly single-step helpers (resolve by name or id).
+		aiAuth.GET("/find", controller.AIFindFiles)
+		aiAuth.GET("/download", controller.AIDownloadByQuery)
+		// Full REST surface.
+		aiAuth.GET("/files", controller.AIListFiles)
+		aiAuth.POST("/files", middleware.UploadSizeLimit(), controller.AIUploadFile)
+		aiAuth.GET("/files/:id", controller.AIGetFile)
+		aiAuth.GET("/files/:id/content", controller.AIDownloadFile)
+		aiAuth.GET("/stats", controller.AIStats)
+	}
 	basicAuth := router.Group("/api")
 	basicAuth.Use(middleware.ApiAuth())
 	{

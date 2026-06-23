@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
 	"go-file/common"
@@ -88,6 +89,50 @@ func (file *File) Delete() error {
 
 func UpdateDownloadCounter(link string) {
 	DB.Model(&File{}).Where("link = ?", link).UpdateColumn("download_counter", gorm.Expr("download_counter + 1"))
+}
+
+// FileById loads a single file row by its numeric id, or nil when not found.
+// Used by the AI API where files are addressed by their stable id rather than
+// the internal storage link.
+func FileById(id int) (*File, error) {
+	var file File
+	err := DB.Where("id = ?", id).First(&file).Error
+	if gorm.IsRecordNotFoundError(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("query file by id %d: %w", id, err)
+	}
+	return &file, nil
+}
+
+// ListFilesPaged returns one page of files matching an optional case-insensitive
+// query (filename/description/uploader/time), newest first, together with the
+// total number of matching rows so callers can build pagination metadata.
+func ListFilesPaged(query string, offset, limit int) ([]*File, int, error) {
+	base := DB.Model(&File{})
+	if query != "" {
+		like := "%" + strings.ToLower(query) + "%"
+		base = base.Where(
+			"LOWER(filename) LIKE ? OR LOWER(description) LIKE ? OR LOWER(uploader) LIKE ? OR LOWER(time) LIKE ?",
+			like, like, like, like)
+	}
+	var total int
+	if err := base.Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("count files: %w", err)
+	}
+	var files []*File
+	if err := base.Order("id desc").Offset(offset).Limit(limit).Find(&files).Error; err != nil {
+		return nil, 0, fmt.Errorf("list files: %w", err)
+	}
+	return files, total, nil
+}
+
+// FileCategory exposes the internal extension-based categorization to callers
+// outside this package (the AI API layer), keeping a single source of truth for
+// how files are bucketed.
+func FileCategory(filename string) string {
+	return categorizeExt(filename)
 }
 
 // FileByLink loads a single file row by its unique link, or nil when not found.
